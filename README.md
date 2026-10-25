@@ -14,4 +14,7 @@ php tests/garden.php
 php tests/pets.php
 php tests/dim.php
 php tests/nashregion.php
+php tests/woman.php
 ```
+
+Карта «Жіночого клубу»: [docs/woman.md](docs/woman.md).

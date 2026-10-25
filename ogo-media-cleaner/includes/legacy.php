@@ -28,13 +28,19 @@ final class OGO_MC_Legacy {
         if(count(self::$cache)>1000)self::$cache=array();
         self::$cache[$id]=$r;return $r;
     }
-    /** Reuse the same publication, permalink and ID checks for Nash Region articles. */
+    /** Shared publication, permalink and ID checks for retired editorial projects. */
     public static function nashregion_replacement($info) {
-        if (!$info || !is_array($info['parts']) || !preg_match('~^/nashregion/(\d{4}-\d{2}-\d{2}/[1-9]\d*\.html)$~', $info['parts']['path'] ?? '', $m)) return array(null, 'невпізнаний формат статті «Наш регіон»');
+        return self::project_replacement($info, 'nashregion');
+    }
+    public static function woman_replacement($info) {
+        return self::project_replacement($info, 'woman');
+    }
+    private static function project_replacement($info, $project) {
+        if (!$info || !is_array($info['parts']) || !preg_match('~^/'.preg_quote($project, '~').'/(\d{4}-\d{2}-\d{2}/[1-9]\d*\.html)$~', $info['parts']['path'] ?? '', $m)) return array(null, 'невпізнаний формат статті старого проєкту');
         $info['parts']['path'] = '/articles/view/'.$m[1];
         if (!self::candidate($info)) return array(null, 'неприпустима адреса статті');
         list($url, $reason) = self::replacement($info);
-        if ($url !== null && preg_match('~^https://(?:www\.)?ogo\.ua/nashregion(?:/|[?#]|$)~i', trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8')))) return array(null, 'стаття досі має стару адресу «Наш регіон»');
+        if ($url !== null && preg_match('~^https://(?:www\.)?ogo\.ua/(?:nashregion|woman)(?:/|[?#]|$)~i', trim(html_entity_decode($url, ENT_QUOTES | ENT_HTML5, 'UTF-8')))) return array(null, 'стаття досі має адресу старого проєкту');
         return array($url, $reason);
     }
     private static function replacement($info) {
