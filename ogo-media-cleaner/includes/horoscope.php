@@ -1,0 +1,48 @@
+<?php
+/** Exact retired horoscope rubric URLs; preserve all bytes outside href. */
+final class OGO_MC_Horoscope {
+    private const TAG = '<(?:[^>"\']|"[^"]*"|\'[^\']*\')*>';
+    private static function candidate($info) {
+        if (!$info || !is_array($info['parts'])) return false;
+        $p = $info['parts'];
+        if (!in_array($p['path'] ?? '', array('/rubrics/view/goroskop', '/rubrics/view/goroskop/'), true)) return false;
+        if (isset($p['user']) || isset($p['pass'])) return false;
+        if (isset($p['host'])) {
+            $scheme = strtolower($p['scheme'] ?? '');
+            if (!in_array(strtolower($p['host']), array('ogo.ua', 'www.ogo.ua'), true) || !in_array($scheme, array('http', 'https'), true)) return false;
+            if (isset($p['port']) && !(($scheme === 'http' && $p['port'] === 80) || ($scheme === 'https' && $p['port'] === 443))) return false;
+        } elseif (isset($p['scheme']) || substr(trim($info['raw']), 0, 1) !== '/') return false;
+        return true;
+    }
+    public static function analyze($content) {
+        $masked = preg_replace_callback('~<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?(?:</\1\s*>|$)~i', function($m) { return str_repeat(' ', strlen($m[0])); }, $content);
+        preg_match_all('~'.self::TAG.'~', $masked, $tokens, PREG_OFFSET_CAPTURE);
+        $stack = array(); $edits = array(); $total = 0;
+        foreach ($tokens[0] as $token) {
+            if (preg_match('~^<a(?=[\s/>])~i', $token[0])) {
+                $tag = substr($content, $token[1], strlen($token[0]));
+                $info = OGO_MC_Engine::href_info($tag);
+                $target = self::candidate($info);
+                if ($target) ++$total;
+                $invalid = !empty($stack) || preg_match('~/\s*>$~', $tag);
+                if ($stack) foreach ($stack as &$open) $open['invalid'] = true;
+                unset($open);
+                $stack[] = array('offset'=>$token[1], 'info'=>$info, 'target'=>$target, 'invalid'=>$invalid);
+            } elseif (preg_match('~^</a\s*>$~i', $token[0]) && $stack) {
+                $open = array_pop($stack);
+                if (!$open['target'] || $open['invalid']) continue;
+                $info = $open['info'];
+                // Only literal known URLs are rewritten. Query/fragment escaping and
+                // surrounding whitespace remain exactly as stored in post_content.
+                $url = preg_replace('~^(\s*)(?:(?i:https?://|//)(?i:www\.)?(?i:ogo\.ua)(?::(?:80|443))?)?/rubrics/view/goroskop/?(?=[?#\s]|$)~', '$1https://ogo.ua/tag/goroskop/', $info['raw'], 1, $count);
+                if ($count) $edits[] = array($open['offset'] + $info['offset'], $info['length'], $url);
+            }
+        }
+        usort($edits, function($a, $b) { return $b[0] <=> $a[0]; });
+        $after = $content;
+        foreach ($edits as $edit) $after = substr_replace($after, $edit[2], $edit[0], $edit[1]);
+        $changed = count($edits); $review = $total - $changed;
+        return array('after'=>$after, 'total'=>$total, 'removed'=>$changed, 'review'=>$review, 'fragments'=>array(),
+            'summary'=>'Замінено посилань рубрики «Гороскоп» на тег: '.$changed.'.'.($review ? ' Неоднозначні або пошкоджені посилання залишено для ручної перевірки: '.$review.'.' : ''));
+    }
+}
