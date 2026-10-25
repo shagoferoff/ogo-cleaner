@@ -13,7 +13,7 @@ final class OGO_MC_Engine {
             'gazeta' => array('label'=>'Рівненська газета', 'hosts'=>array('gazeta.rv.ua','www.gazeta.rv.ua'), 'photo_callouts'=>false),
             'catalog' => array('label'=>'Каталог — зняття посилань', 'hosts'=>array('catalog.ogo.ua'), 'photo_callouts'=>false),
             'ustream' => array('label'=>'Ustream — видалення плеєрів і підписів', 'hosts'=>array('ustream.tv','www.ustream.tv'), 'photo_callouts'=>false),
-            'nashregion_urls' => array('label'=>'Наш регіон — заміна URL', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
+            'nashregion_urls' => array('label'=>'Регіони — рубрики → теги', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'dim_urls' => array('label'=>'Дім — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'pets_urls' => array('label'=>'Домашні тварини — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'garden_urls' => array('label'=>'Дача, сад, город — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),

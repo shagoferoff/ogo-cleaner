@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.20.0
+ * Version: 1.21.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/includes/engine.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.20.0';
+    private const VERSION = '1.21.0';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -172,7 +172,7 @@ final class OGO_Media_Cleaner {
         wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
         ?>
         <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано операцію «Дім — рубрика → тег»: головна рубрики <code>/rubrics/view/dim/</code> та сторінки <code>/rubrics/view/dim/page:16</code> замінюються на <code>https://ogo.ua/tag/dim/</code> зі збереженням тексту та оформлення. Після оновлення натисніть «Нове сканування».</p>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Розширено операцію «Регіони — рубрики → теги»: підтримано 14 регіональних рубрик із <code>/nashregion</code> і без нього, включно зі сторінками <code>/page:N</code> зі збереженням тексту та оформлення. Після оновлення натисніть «Нове сканування».</p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($ustream_mode): ?>
@@ -189,7 +189,7 @@ final class OGO_Media_Cleaner {
         <p>Обробляє в порядку 3 → 1 → 2: впізнані контактні блоки «Пишіть мені листи за адресою:», цілі прості абзаци з <code>gazeta.rv.ua@gmail.com</code>, окремі абзаци з посиланнями <code>gazeta.rv.ua</code> / <code>www.gazeta.rv.ua</code>. Неоднозначні контактні блоки залишає для перевірки. Наступний звичайний текст статті зберігає.</p>
         <p>Лічильник показує збіги email, посилань газети, контактних заголовків і згадок <code>ogo.ua/gazeta</code>, а не лише HTML-посилання. У рядках звіту видно результат кожного правила.</p>
         <?php elseif ($project==='nashregion_urls'): ?>
-        <p>Замінює 14 рубрик <code>/nashregion/rubrics/view/…</code> на теги за картою, звіреною з експортом WordPress. Головну <code>/nashregion</code> або <code>/nashregion/</code> замінює на <code>https://ogo.ua/rubrics/view/region/</code> («Новини Рівного»). Якір <code>#page-top</code> прибирається із замінюваних посилань цього проєкту. Текст, оформлення та інші атрибути зберігаються.</p>
+        <p>Замінює 14 регіональних рубрик <code>/rubrics/view/…</code> і <code>/nashregion/rubrics/view/…</code> на теги за картою, звіреною з експортом WordPress. Підтримує головні рубрик і сторінки <code>/page:N</code>: наприклад, обидва варіанти <code>dubno</code> та їхні сторінки ведуть на <code>https://ogo.ua/tag/dubno/</code>. Головну <code>/nashregion</code> або <code>/nashregion/</code> замінює на <code>https://ogo.ua/rubrics/view/region/</code> («Новини Рівного»). Якір <code>#page-top</code> прибирається із замінюваних посилань цього проєкту. Текст, оформлення та інші атрибути зберігаються.</p>
         <p>Статті виду <code>/nashregion/РРРР-ММ-ДД/ID.html</code> знаходить за ID WordPress і підставляє актуальний permalink опублікованої доступної статті. Адреси статей із параметрами, відсутні/закриті записи, невідомі рубрики, вкладені й незакриті посилання залишає для перевірки. Якщо є необроблені збіги, матеріал не потрапляє до готових для масової заміни. Перед застосуванням повторно перевіряє результат; зміна доступності або URL цілі зупиняє запис.</p>
         <p>Підтримує http, https, www, // та адреси від кореня сайту. Для рубрик і головної параметри зберігаються; інші якорі зберігаються. Коментарі та блоки коду пропускає. Доступні попередній перегляд, журнал і відкат.</p>
         <?php elseif ($project==='dim_urls'): ?>

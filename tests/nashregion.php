@@ -87,6 +87,39 @@ check_region('<a href="'.$article.'">Стаття</a>','<a href="https://ogo.ua/
 unset($lookup[33708]);
 $html = '<a href="'.$article.'">Стаття</a>';
 check_region($html,$html,1,0,1);
+// The verified map applies to both historical regional URL namespaces.
+foreach ($map as $source=>$dest) {
+    foreach (array('/rubrics/view/', '/nashregion/rubrics/view/') as $prefix) {
+        foreach (array('', '/', '/page:16', '/page:16/') as $suffix) {
+            $url = 'https://ogo.ua'.$prefix.$source.$suffix;
+            $html = '<p><a href="'.$url.'" title="a > b"><strong>Новини</strong></a></p>';
+            check_region($html, str_replace($url, 'https://ogo.ua/tag/'.$dest.'/', $html),1,1,0);
+        }
+    }
+}
+foreach (array('https://www.ogo.ua','http://ogo.ua','//ogo.ua','') as $origin) {
+    foreach (array('/rubrics/view/dubno/page:16','/nashregion/rubrics/view/dubno/page:16') as $path) {
+        $html = '<a href=" '.$origin.$path.'?x=1&amp;y=2#page-top ">Дубно</a>';
+        check_region($html, '<a href=" https://ogo.ua/tag/dubno/?x=1&amp;y=2 ">Дубно</a>',1,1,0);
+    }
+}
+// A non-top fragment and other content are retained in a mixed article.
+$html = '<!-- wp:paragraph --><p><a href="/rubrics/view/hoshcha#news">Гоща</a> <a href="/nashregion/rubrics/view/korets/page:2">Корець</a></p><!-- /wp:paragraph -->';
+check_region($html, '<!-- wp:paragraph --><p><a href="https://ogo.ua/tag/goshha/#news">Гоща</a> <a href="https://ogo.ua/tag/korecz/">Корець</a></p><!-- /wp:paragraph -->',2,2,0);
+foreach (array('/rubrics/view/dubno/page:abc','/rubrics/view/dubno/page:16/more','/rubrics/view/dubno/other') as $url) {
+    $html = '<a href="'.$url.'">Дубно</a>';
+    check_region($html,$html,1,0,1);
+}
+foreach (array('/rubrics/view/dubnosomething','/rubrics/view/region/','/rubrics/view/dim/page:16','/rubrics/view/unknown','https://evil.example/rubrics/view/dubno','https://ogo.ua.evil.example/rubrics/view/dubno','https://user@ogo.ua/rubrics/view/dubno') as $url) {
+    $html = '<a href="'.$url.'">Посилання</a>';
+    check_region($html,$html,0,0,0);
+}
+foreach (array('script','style','textarea','pre','code') as $element) {
+    $html = '<'.$element.'><a href="/rubrics/view/dubno/page:16">Дубно</a></'.$element.'>';
+    check_region($html,$html,0,0,0);
+}
+$html = '<a href="/rubrics/view/dubno">Новини';
+check_region($html,$html,1,0,1);
 echo 'Passed '.$count." Nash Region functional cases.\n";
 // Optional private export verification; CSV content is never stored in Git.
 if (isset($argv[1])) {
