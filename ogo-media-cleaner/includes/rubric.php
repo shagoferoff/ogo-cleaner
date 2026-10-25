@@ -3,6 +3,7 @@
 final class OGO_MC_Rubric {
     private const RULES = array(
         'goroskop' => array('tag'=>'goroskop', 'label'=>'Гороскоп'),
+        'pets' => array('tag'=>'domashni-tvaryny', 'label'=>'Домашні тварини'),
         'garden' => array('tag'=>'dacha-sad-gorod', 'label'=>'Дача, сад, город')
     );
     private const TAG = '<(?:[^>"\']|"[^"]*"|\'[^\']*\')*>';
