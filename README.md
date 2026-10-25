@@ -15,6 +15,20 @@ php tests/pets.php
 php tests/dim.php
 php tests/nashregion.php
 php tests/woman.php
+php tests/audit.php
+node tests/audit-js.cjs
 ```
 
 Карта «Жіночого клубу»: [docs/woman.md](docs/woman.md).
+
+Ревізія старих посилань: [docs/audit.md](docs/audit.md).
+
+Інтеграційний тест ревізії запускається окремо на чистій тестовій інсталяції
+WordPress з активованим плагіном, адміністратором `audit_admin` і базою
+`ogo_audit_test`; він створює тестові записи. Встановіть URL тестового сайту
+`https://ogo.ua`, заблокуйте зовнішні HTTP-запити (`WP_HTTP_BLOCK_EXTERNAL`)
+та вимкніть WP Cron. Не використовуйте робочу базу сайту.
+
+```sh
+OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/audit-wordpress.php
+```

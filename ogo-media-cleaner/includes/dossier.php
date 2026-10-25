@@ -2,7 +2,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class OGO_MC_Dossier {
-    private static function map() {
+    public static function map() {
         return array(
             // Additional exact matches confirmed by the OGO editors.
             '/dossier/vlada/homko' => 'https://my.rv.ua/dossier-details/homko-volodimir-yevgenovich/',

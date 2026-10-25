@@ -9,6 +9,7 @@ final class OGO_MC_Nashregion {
         'rivne'=>'rivne', 'sarny'=>'sarny', 'volodymyrets'=>'volodymyrecz',
         'zarichne'=>'zarichne', 'zdolbuniv'=>'zdolbuniv'
     );
+    public static function rubric_map() { return self::RUBRICS; }
     private static function candidate($info) {
         if (!$info || !is_array($info['parts'])) return false;
         $p = $info['parts'];

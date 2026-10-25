@@ -8,6 +8,7 @@ final class OGO_MC_Rubric {
         'garden' => array('tag'=>'dacha-sad-gorod', 'label'=>'Дача, сад, город')
     );
     private const TAG = '<(?:[^>"\']|"[^"]*"|\'[^\']*\')*>';
+    public static function rules() { return self::RULES; }
     private static function path_pattern($rubric) {
         return '/rubrics/view/'.preg_quote($rubric, '~').(!empty(self::RULES[$rubric]['pagination']) ? '(?:/page:[0-9]+)?' : '').'/?';
     }

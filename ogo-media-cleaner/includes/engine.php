@@ -5,6 +5,7 @@ final class OGO_MC_Engine {
     private const ANCHOR = '~<a\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?</a\s*>~i';
     public static function projects() {
         return array(
+            'audit' => array('label'=>'Ревізія старих посилань', 'hosts'=>array('ogo.ua','ogo.rv.ua'), 'photo_callouts'=>false),
             'media' => array('label'=>'Медіа', 'hosts'=>array('media.ogo.ua','www.media.ogo.ua'), 'photo_callouts'=>true),
             'media_unwrap' => array('label'=>'Медіа — зняття посилань, зберегти текст', 'hosts'=>array('media.ogo.ua','www.media.ogo.ua'), 'photo_callouts'=>false),
             'blog' => array('label'=>'Блоги', 'hosts'=>array('blog.ogo.ua','www.blog.ogo.ua'), 'photo_callouts'=>false),
@@ -237,6 +238,7 @@ final class OGO_MC_Engine {
     }
     public static function analyze($content, $project = 'media', $base_rules = false) {
         if (!isset(self::projects()[$project])) throw new InvalidArgumentException('Unknown cleanup project');
+        if ($project === 'audit') throw new InvalidArgumentException('Use the read-only audit engine');
         // Preserve comments, code and raw text verbatim. Mask length remains identical.
         $masked = preg_replace_callback('~<!--[\s\S]*?-->|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?</\1\s*>~i', function($m) { return str_repeat(' ', strlen($m[0])); }, $content);
         if ($project === 'ustream') { require_once __DIR__.'/ustream.php'; return OGO_MC_Ustream::analyze($content,$masked); }
