@@ -14,6 +14,7 @@ final class OGO_MC_Engine {
             'gazeta' => array('label'=>'Рівненська газета', 'hosts'=>array('gazeta.rv.ua','www.gazeta.rv.ua'), 'photo_callouts'=>false),
             'catalog' => array('label'=>'Каталог — зняття посилань', 'hosts'=>array('catalog.ogo.ua'), 'photo_callouts'=>false),
             'ustream' => array('label'=>'Ustream — видалення плеєрів і підписів', 'hosts'=>array('ustream.tv','www.ustream.tv'), 'photo_callouts'=>false),
+            'editorial_urls' => array('label'=>'Погоджені рубрики — в теги', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'woman_urls' => array('label'=>'Жіночий клуб — заміна URL', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'nashregion_urls' => array('label'=>'Регіони — рубрики → теги', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'dim_urls' => array('label'=>'Дім — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
@@ -242,6 +243,7 @@ final class OGO_MC_Engine {
         // Preserve comments, code and raw text verbatim. Mask length remains identical.
         $masked = preg_replace_callback('~<!--[\s\S]*?-->|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?</\1\s*>~i', function($m) { return str_repeat(' ', strlen($m[0])); }, $content);
         if ($project === 'ustream') { require_once __DIR__.'/ustream.php'; return OGO_MC_Ustream::analyze($content,$masked); }
+        if ($project === 'editorial_urls') { require_once __DIR__.'/editorial.php'; return OGO_MC_Editorial::analyze($content); }
         if ($project === 'woman_urls') { require_once __DIR__.'/woman.php'; return OGO_MC_Woman::analyze($content); }
         if ($project === 'nashregion_urls') { require_once __DIR__.'/nashregion.php'; return OGO_MC_Nashregion::analyze($content); }
         if ($project === 'dim_urls') { require_once __DIR__.'/rubric.php'; return OGO_MC_Rubric::analyze($content, 'dim'); }

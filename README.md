@@ -16,6 +16,7 @@ php tests/dim.php
 php tests/nashregion.php
 php tests/woman.php
 php tests/audit.php
+php tests/editorial.php
 node tests/audit-js.cjs
 ```
 
@@ -31,4 +32,12 @@ WordPress з активованим плагіном, адміністратор
 
 ```sh
 OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/audit-wordpress.php
+```
+
+Погоджені заміни з ревізії: [docs/editorial.md](docs/editorial.md).
+
+Для перевірки нового режиму замін у тій самій ізольованій базі:
+
+```sh
+OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/editorial-wordpress.php
 ```

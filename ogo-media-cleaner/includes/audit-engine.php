@@ -62,9 +62,13 @@ final class OGO_MC_Audit_Engine {
                 require_once __DIR__.'/nashregion.php';
                 require_once __DIR__.'/woman.php';
                 require_once __DIR__.'/rubric.php';
+                require_once __DIR__.'/editorial.php';
                 $slug = $rubric[2]; $prefix = $rubric[1];
                 $regions = OGO_MC_Nashregion::rubric_map(); $women = OGO_MC_Woman::rubric_map(); $rules = OGO_MC_Rubric::rules();
-                if (in_array($prefix, array('/rubrics/view/','/nashregion/rubrics/view/'), true) && isset($regions[$slug])) {
+                $editorial = OGO_MC_Editorial::destination_for_path($path);
+                if ($editorial !== null) {
+                    $target = $editorial; $action = 'Є карта: Погоджені рубрики — в теги';
+                } elseif (in_array($prefix, array('/rubrics/view/','/nashregion/rubrics/view/'), true) && isset($regions[$slug])) {
                     $target = 'https://ogo.ua/tag/'.$regions[$slug].'/'; $action = 'Є карта: Регіони — рубрики → теги';
                 } elseif (in_array($prefix, array('/rubrics/view/','/woman/rubrics/view/'), true) && isset($women[$slug])) {
                     $target = 'https://ogo.ua/tag/'.$women[$slug].'/'; $action = 'Є карта: Жіночий клуб — заміна URL';
