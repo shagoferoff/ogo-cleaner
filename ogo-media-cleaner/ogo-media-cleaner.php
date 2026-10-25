@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.19.0
+ * Version: 1.20.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/includes/engine.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.19.0';
+    private const VERSION = '1.20.0';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -83,7 +83,7 @@ final class OGO_Media_Cleaner {
                 foreach ($posts as $p) {
                     $a=OGO_MC_Engine::analyze($p->post_content,$project);
                     if ($a['total']) {
-                        $ready=$a['removed'] && (!in_array($project,array('media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls'),true) || !$a['review']);
+                        $ready=$a['removed'] && (!in_array($project,array('media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls'),true) || !$a['review']);
                         $ok=$wpdb->insert($t,array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??''));
                         if (!$ok) wp_send_json_error('Не вдалося записати звіт. Перезапустіть сканування.');
                     }
@@ -155,7 +155,7 @@ final class OGO_Media_Cleaner {
         $project=sanitize_key(wp_unslash($_GET['project']??'media'));
         if (!self::valid_project($project)) $project='media';
         $s=self::state($project); $projects=OGO_MC_Engine::projects();
-        $replacing=in_array($project,array('day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls'),true);
+        $replacing=in_array($project,array('day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls'),true);
         $unwrapping=in_array($project,array('catalog','media_unwrap'),true);
         $vk_mode=$project==='vk';
         $ustream_mode=$project==='ustream';
@@ -172,7 +172,7 @@ final class OGO_Media_Cleaner {
         wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
         ?>
         <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано операцію «Наш регіон — заміна URL»: 14 регіональних рубрик замінюються на підтверджені теги, головна проєкту — на «Новини Рівного» зі збереженням тексту та оформлення. Після оновлення натисніть «Нове сканування».</p>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано операцію «Дім — рубрика → тег»: головна рубрики <code>/rubrics/view/dim/</code> та сторінки <code>/rubrics/view/dim/page:16</code> замінюються на <code>https://ogo.ua/tag/dim/</code> зі збереженням тексту та оформлення. Після оновлення натисніть «Нове сканування».</p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($ustream_mode): ?>
@@ -192,6 +192,9 @@ final class OGO_Media_Cleaner {
         <p>Замінює 14 рубрик <code>/nashregion/rubrics/view/…</code> на теги за картою, звіреною з експортом WordPress. Головну <code>/nashregion</code> або <code>/nashregion/</code> замінює на <code>https://ogo.ua/rubrics/view/region/</code> («Новини Рівного»). Якір <code>#page-top</code> прибирається із замінюваних посилань цього проєкту. Текст, оформлення та інші атрибути зберігаються.</p>
         <p>Статті виду <code>/nashregion/РРРР-ММ-ДД/ID.html</code> знаходить за ID WordPress і підставляє актуальний permalink опублікованої доступної статті. Адреси статей із параметрами, відсутні/закриті записи, невідомі рубрики, вкладені й незакриті посилання залишає для перевірки. Якщо є необроблені збіги, матеріал не потрапляє до готових для масової заміни. Перед застосуванням повторно перевіряє результат; зміна доступності або URL цілі зупиняє запис.</p>
         <p>Підтримує http, https, www, // та адреси від кореня сайту. Для рубрик і головної параметри зберігаються; інші якорі зберігаються. Коментарі та блоки коду пропускає. Доступні попередній перегляд, журнал і відкат.</p>
+        <?php elseif ($project==='dim_urls'): ?>
+        <p>Замінює лише href головної рубрики <code>/rubrics/view/dim</code>, <code>/rubrics/view/dim/</code> та сторінок <code>/rubrics/view/dim/page:N</code> (N — число) на <code>https://ogo.ua/tag/dim/</code>. Усі номери сторінок ведуть на головну тегу. Текст, оформлення та інші атрибути посилання зберігаються.</p>
+        <p>Підтримує http, https, www, //, адреси від кореня сайту та кінцевий слеш. Параметри й фрагменти зберігаються. Інші рубрики й домени не змінює. Коментарі та блоки коду пропускає; вкладені й незакриті посилання залишає для перевірки. Матеріали з необробленими збігами не потрапляють у масову заміну готових.</p>
         <?php elseif ($project==='pets_urls'): ?>
         <p>Замінює лише href посилань зі старої рубрики <code>https://ogo.ua/rubrics/view/pets</code> на тег <code>https://ogo.ua/tag/domashni-tvaryny/</code>. Текст посилання, оформлення та інші атрибути зберігаються.</p>
         <p>Підтримує http, https, www, //, адреси від кореня сайту та кінцевий слеш. Параметри й фрагмент #… зберігаються. Інші рубрики, домени й уже актуальні посилання не змінює. Коментарі та блоки коду пропускає; вкладені й незакриті посилання залишає для перевірки. Матеріали з такими збігами потребують ручної перевірки.</p>

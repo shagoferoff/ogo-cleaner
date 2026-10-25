@@ -12,5 +12,6 @@ WordPress-плагін OGO cleaner; код у `ogo-media-cleaner/`, готові
 php tests/horoscope.php
 php tests/garden.php
 php tests/pets.php
+php tests/dim.php
 php tests/nashregion.php
 ```
