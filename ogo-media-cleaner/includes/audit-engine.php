@@ -47,6 +47,10 @@ final class OGO_MC_Audit_Engine {
         $p['url'] = $url;
         return $p;
     }
+    private static function legacy_path($path) {
+        require_once __DIR__.'/legacy.php';
+        return OGO_MC_Legacy::path_candidate($path);
+    }
     public static function classify($raw, $base = 'https://ogo.ua/') {
         $p = self::resolve($raw, $base);
         if (!$p) return null;
@@ -82,7 +86,7 @@ final class OGO_MC_Audit_Engine {
             $category = 'known'; $group_path = '/woman'; $target = 'https://ogo.ua/tag/zhinochyj-klub/'; $action = 'Є карта: Жіночий клуб — заміна URL';
         } elseif ($main && in_array($path, array('/nashregion','/nashregion/'), true)) {
             $category = 'known'; $group_path = '/nashregion'; $target = 'https://ogo.ua/rubrics/view/region/'; $action = 'Є карта: Регіони — рубрики → теги';
-        } elseif (preg_match('~^/articles/view(?:/|$)~i', $path) || preg_match('~^/(?:[^/]+/)?[0-9]{4}-[0-9]{2}-[0-9]{2}/[1-9][0-9]*\.html$~D', $path)) {
+        } elseif (self::legacy_path($path) || preg_match('~^/(?:[^/]+/)?[0-9]{4}-[0-9]{2}-[0-9]{2}/[1-9][0-9]*\.html$~D', $path)) {
             $category = 'old_article'; $action = 'Перевірити збережений ID, доступність статті й актуальний permalink';
         } elseif ($main && preg_match('~^/dossier(?:/|$)~', $path)) {
             require_once __DIR__.'/dossier.php';

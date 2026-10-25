@@ -17,6 +17,7 @@ php tests/nashregion.php
 php tests/woman.php
 php tests/audit.php
 php tests/editorial.php
+php tests/legacy.php
 node tests/audit-js.cjs
 ```
 
@@ -40,4 +41,11 @@ OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/audit-wordpress.php
 
 ```sh
 OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/editorial-wordpress.php
+```
+
+Розпізнавання пошкоджених старих адрес статей: [docs/legacy.md](docs/legacy.md).
+Інтеграційний тест на тій самій ізольованій тестовій інсталяції:
+
+```sh
+OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/legacy-wordpress.php
 ```

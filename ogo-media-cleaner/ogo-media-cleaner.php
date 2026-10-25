@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.24.0
+ * Version: 1.25.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/audit.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.24.0';
+    private const VERSION = '1.25.0';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -87,7 +87,7 @@ final class OGO_Media_Cleaner {
                 foreach ($posts as $p) {
                     $a=OGO_MC_Engine::analyze($p->post_content,$project);
                     if ($a['total']) {
-                        $ready=$a['removed'] && (!in_array($project,array('media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
+                        $ready=$a['removed'] && (!in_array($project,array('legacy_urls','media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
                         $ok=$wpdb->insert($t,array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??''));
                         if (!$ok) wp_send_json_error('Не вдалося записати звіт. Перезапустіть сканування.');
                     }
@@ -177,7 +177,7 @@ final class OGO_Media_Cleaner {
         wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
         ?>
         <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано «Погоджені рубрики — в теги»: точні відповідники з ревізії та старі рейтингові рубрики. Активна рубрика <code>/rubrics/view/top/</code> зберігається. Ревізія показує нові відповідники. Після оновлення натисніть «Нове сканування».</p>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Розширено «ОГО — старі URL → актуальні»: розпізнає помилки формату й домену, визначає однозначний ID та перевіряє актуальну статтю WordPress. Невизначені випадки залишаються для ручної перевірки. Після оновлення натисніть «Нове сканування».</p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($ustream_mode): ?>
@@ -219,8 +219,9 @@ final class OGO_Media_Cleaner {
         <p>Замінює лише href посилань зі старої рубрики <code>https://ogo.ua/rubrics/view/goroskop</code> на тег <code>https://ogo.ua/tag/goroskop/</code>. Текст посилання (зокрема «ЩОДЕННИЙ ГОРОСКОП»), оформлення та інші атрибути зберігаються.</p>
         <p>Підтримує http, https, www, //, адреси від кореня сайту та кінцевий слеш. Параметри й фрагмент #… зберігаються. Інші рубрики, домени й уже актуальні посилання не змінює. Коментарі та блоки коду пропускає; вкладені й незакриті посилання залишає для перевірки. Матеріали з такими збігами потребують ручної перевірки.</p>
         <?php elseif ($project==='legacy_urls'): ?>
-        <p>Для старих посилань <code>ogo.ua/articles/view/РРРР-ММ-ДД/ID.html</code> знаходить опубліковану статтю за тим самим ID WordPress і отримує її актуальну адресу. Змінює лише href; текст посилання та оформлення зберігає. Підтримує http, https, www, // та адреси від кореня сайту. Фрагмент #… зберігається.</p>
-        <p>Працює локально через WordPress без HTTP-запитів та API-ключа. Відсутні статті, неопубліковані/захищені записи, незвичні адреси та URL із параметрами залишає для перевірки з поясненням у журналі. Наявні правила редиректів зберігаються. Перед застосуванням повторно перевіряє відповідність адрес попередньому перегляду. Перевірка HTTP-доступності кінцевої сторінки не виконується.</p>
+        <p>Визначає ID зі старих адрес <code>/articles/view/…</code> та <code>/articles/дата/ID…</code>. Підтримує .html, .htm, відсутнє розширення, крапку після адреси, зайвий br наприкінці та вкладені/склеєні URL з одним і тим самим ID. Домени джерел: ogo.ua, mail.ogo.ua, gazeta.ogo.ua (також www, http, https, // та адреси від кореня). Запити до цих старих адрес не виконуються.</p>
+        <p>Заміна відбувається лише за однозначним ID, коли WordPress знаходить доступну опубліковану статтю без пароля й повертає актуальний permalink. ID важливіший за помилкову дату в старому URL. Різні ID в одній адресі, невідомі суфікси, параметри URL, відсутні й закриті статті залишаються для перевірки з поясненням. Якщо матеріал має необроблені збіги, він не потрапляє до готових для масової заміни.</p>
+        <p>Змінює лише href, зберігає текст, оформлення та інші атрибути. Прибирає #page-top; інші якорі зберігає. Перед застосуванням повторно перевіряє актуальність адрес і доступність статей. Нічого автоматично не видаляє; доступні попередній перегляд, журнал і відкат.</p>
         <?php elseif ($project==='dossier_urls'): ?>
         <p>Змінює лише href старих посилань на досьє ОГО <code>/dossier/...</code>, <code>ogo.ua/dossier/...</code> та <code>ogo.rv.ua/dossier/...</code> на підтверджені сторінки Рівнян <code>https://my.rv.ua/dossier-details/...</code>. Текст посилання, оформлення, абзаци й інший контент не змінює.</p>
         <p>Відповідники взяті зі списку Product Showcase Рівнян та доповнені підтвердженими редакцією точними парами URL. Посилання без однозначного відповідника залишає в ручній перевірці; якщо в одному матеріалі є і готові, і невпізнані dossier-посилання, матеріал також не потрапляє в масове «готове» очищення без перегляду.</p>

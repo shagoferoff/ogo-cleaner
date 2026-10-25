@@ -21,7 +21,7 @@ final class OGO_MC_Engine {
             'pets_urls' => array('label'=>'Домашні тварини — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'garden_urls' => array('label'=>'Дача, сад, город — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'horoscope_urls' => array('label'=>'Гороскоп — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
-            'legacy_urls' => array('label'=>'ОГО — старі URL → актуальні', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
+            'legacy_urls' => array('label'=>'ОГО — старі URL → актуальні', 'hosts'=>array('ogo.ua','www.ogo.ua','mail.ogo.ua','gazeta.ogo.ua'), 'photo_callouts'=>false),
             'dossier_urls' => array('label'=>'Досьє ОГО → Рівняни', 'hosts'=>array('ogo.ua','www.ogo.ua','ogo.rv.ua','www.ogo.rv.ua'), 'photo_callouts'=>false),
             'vk' => array('label'=>'ВКонтакте — очищення посилань', 'hosts'=>array('vk.com','www.vk.com'), 'photo_callouts'=>false)
         );

@@ -4,25 +4,71 @@ final class OGO_MC_Legacy {
     private const TAG='<(?:[^>"\']|"[^"]*"|\'[^\']*\')*>';
     private static $cache=array();
     public static function clear_cache() { self::$cache=array(); }
+    public static function path_candidate($path) {
+        // /view may be missing; the date can contain historical typing errors.
+        return preg_match('~^/articles/(?:view(?:/|$)|[0-9]{4}-[0-9-]+(?:/|$))~i', $path) === 1;
+    }
     public static function candidate($info) {
-        if(!$info || !is_array($info['parts']))return false;
-        $p=$info['parts'];$path=$p['path']??'';
-        if(!preg_match('~^/articles/view(?:/|$)~i',$path))return false;
-        if(isset($p['user'])||isset($p['pass']))return false;
-        if(isset($p['host'])) {
-            if(!in_array(strtolower($p['host']),array('ogo.ua','www.ogo.ua'),true)||!in_array(strtolower($p['scheme']??''),array('http','https'),true))return false;
-            if(isset($p['port']) && !((strtolower($p['scheme'])==='http'&&$p['port']===80)||(strtolower($p['scheme'])==='https'&&$p['port']===443)))return false;
-        } elseif(isset($p['scheme']) || substr(trim($info['raw']),0,1)!=='/')return false;
+        if (!$info || !is_array($info['parts'])) return false;
+        $p = $info['parts'];
+        if (!self::path_candidate($p['path'] ?? '')) return false;
+        if (isset($p['user']) || isset($p['pass'])) return false;
+        if (isset($p['host'])) {
+            // These mistaken origins were explicitly identified by the editors.
+            $host = strtolower($p['host']);
+            if (substr($host,0,4)==='www.') $host=substr($host,4);
+            if (!in_array($host,array('ogo.ua','gazeta.ogo.ua','mail.ogo.ua'),true) || !in_array(strtolower($p['scheme'] ?? ''),array('http','https'),true)) return false;
+            if (isset($p['port']) && !((strtolower($p['scheme'])==='http' && $p['port']===80) || (strtolower($p['scheme'])==='https' && $p['port']===443))) return false;
+        } elseif (isset($p['scheme']) || substr(trim($info['raw']),0,1)!=='/') return false;
         return true;
+    }
+    private static function review_candidate($info) {
+        if (!$info || !is_array($info['parts'])) return false;
+        $p=$info['parts']; $host=strtolower($p['host'] ?? ''); $scheme=strtolower($p['scheme'] ?? '');
+        if (!self::path_candidate($p['path'] ?? '') || isset($p['user']) || isset($p['pass']) || !in_array($scheme,array('http','https'),true)) return false;
+        if (isset($p['port']) && !(($scheme==='http' && $p['port']===80) || ($scheme==='https' && $p['port']===443))) return false;
+        return $host==='ogo.rv.ua' || substr($host,-7)==='.ogo.ua' || substr($host,-10)==='.ogo.rv.ua';
+    }
+    private static function clean_tail($path) {
+        // Remove only recognizable formatting garbage. Arbitrary suffixes are
+        // never discarded to manufacture a valid-looking article ID.
+        return preg_replace('~(?:[.\s\p{Z}]+|<br\s*/?>)+$~iu','',$path);
+    }
+    public static function extract_id($info) {
+        if (!self::candidate($info)) return array(null,'неприпустимий домен або шлях старої адреси');
+        $p=$info['parts'];
+        if (isset($p['query']) && $p['query']!=='') return array(null,'адреса має параметри — потрібна перевірка');
+        $path=self::clean_tail(rawurldecode($p['path']));
+        if ($path===null || preg_match('/[\x00-\x1f\x7f]/',$path)) return array(null,'пошкоджене кодування адреси');
+        // Split only known embedded OGO origins. Every remaining segment must
+        // be either an article or a date-only prefix from a duplicated URL.
+        $segments=preg_split('~(?:https?://|//)?(?:www\.)?(?:mail\.ogo\.ua|gazeta\.ogo\.ua|ogo\.ua)(?=/articles/)~i',$path);
+        $ids=array(); $last_article=false;
+        foreach ($segments as $segment) {
+            $segment=self::clean_tail($segment); $last_article=false;
+            if (preg_match('~^/articles/(?:view/)?(?:[0-9]{4}-[0-9-]+/)?([1-9][0-9]*)(?:\.html?|html)?/?$~iD',$segment,$m)) {
+                $id=$m[1];
+                if (strlen($id)>strlen((string)PHP_INT_MAX) || (strlen($id)===strlen((string)PHP_INT_MAX) && strcmp($id,(string)PHP_INT_MAX)>0)) return array(null,'ID за межами допустимого діапазону');
+                $ids[$id]=true; $last_article=true;
+            } elseif (!(count($segments)>1 && preg_match('~^/articles/(?:view/)?[0-9]{4}-[0-9-]+/$~iD',$segment))) {
+                return array(null,'невпізнаний суфікс або структура адреси — потрібна перевірка');
+            }
+        }
+        if (count($ids)!==1 || !$last_article) return array(null,count($ids)>1 ? 'в адресі різні ID: '.implode(', ',array_keys($ids)) : 'не вдалося однозначно визначити ID');
+        return array((int)array_keys($ids)[0],null);
     }
     private static function destination($id) {
         if(isset(self::$cache[$id]))return self::$cache[$id];
         $p=get_post($id);
-        if(!$p || $p->post_type!=='post' || $p->post_status!=='publish' || !empty($p->post_password) || !is_post_publicly_viewable($p))$r=array(null,'немає доступної опублікованої статті');
+        if (!$p) $r=array(null,'ID '.$id.': статтю не знайдено');
+        elseif ($p->post_type!=='post') $r=array(null,'ID '.$id.': запис не є статтею post');
+        elseif ($p->post_status!=='publish') $r=array(null,'ID '.$id.': стаття не опублікована ('.$p->post_status.')');
+        elseif (!empty($p->post_password)) $r=array(null,'ID '.$id.': стаття захищена паролем');
+        elseif (!is_post_publicly_viewable($p)) $r=array(null,'ID '.$id.': стаття недоступна публічно');
         else {
             $url=get_permalink($p);$parts=is_string($url)?parse_url($url):false;
             $home=parse_url(home_url('/'));
-            if(!$parts || !$home || !in_array(strtolower($parts['scheme']??''),array('http','https'),true) || !in_array(strtolower($parts['host']??''),array('ogo.ua','www.ogo.ua'),true) || strtolower($parts['host'])!==strtolower($home['host']??'') || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || isset($parts['port']) || empty($parts['path']) || $parts['path']==='/' || preg_match('~^/articles/view(?:/|$)~i',$parts['path']) || preg_match('/[\s<>"\x{0027}]/u',$url))$r=array(null,'WordPress не повернув звичайний внутрішній permalink');
+            if(!$parts || !$home || !in_array(strtolower($parts['scheme']??''),array('http','https'),true) || !in_array(strtolower($parts['host']??''),array('ogo.ua','www.ogo.ua'),true) || strtolower($parts['host'])!==strtolower($home['host']??'') || isset($parts['user']) || isset($parts['pass']) || isset($parts['query']) || isset($parts['fragment']) || isset($parts['port']) || empty($parts['path']) || $parts['path']==='/' || preg_match('~^/(?:articles|nashregion|woman)(?:/|$)~i',$parts['path']) || preg_match('/[\s<>"\x{0027}]/u',$url))$r=array(null,'WordPress не повернув звичайний внутрішній permalink');
             else $r=array(preg_replace('~^http://~i','https://',$url),null);
         }
         if(count(self::$cache)>1000)self::$cache=array();
@@ -59,15 +105,39 @@ final class OGO_MC_Legacy {
         preg_match('/^\s*/',$info['raw'],$leading);preg_match('/\s*$/',$info['raw'],$trailing);
         return array($leading[0].$url.$trailing[0],null);
     }
+    private static function legacy_replacement($info) {
+        if (!self::candidate($info)) return array(null,'Підпроєкт '.($info['parts']['host'] ?? '').': потрібно підтвердити відповідність ID основному сайту');
+        list($id,$reason)=self::extract_id($info);
+        if ($id===null) return array(null,$reason);
+        list($url,$reason)=self::destination($id);
+        if ($url===null) return array(null,$reason);
+        if (isset($info['parts']['fragment']) && $info['parts']['fragment']!=='page-top') $url.='#'.$info['parts']['fragment'];
+        if (preg_match('/[\x00-\x20<>"\x{0027}]/u',$url)) return array(null,'ID '.$id.': незвичний фрагмент адреси');
+        $url=htmlspecialchars($url,ENT_QUOTES | ENT_HTML5,'UTF-8');
+        $url=str_replace(array('`','='),array('&#96;','&#61;'),$url);
+        preg_match('/^\s*/',$info['raw'],$leading); preg_match('/\s*$/',$info['raw'],$trailing);
+        return array($leading[0].$url.$trailing[0],null);
+    }
+    private static function read_info($tag) {
+        $info=OGO_MC_Engine::href_info($tag);
+        if ($info && $info['parts']===false) {
+            $relative=trim(html_entity_decode($info['raw'],ENT_QUOTES | ENT_HTML5,'UTF-8'));
+            if (substr($relative,0,1)==='/' && substr($relative,0,2)!=='//') {
+                $parts=parse_url('https://ogo.ua'.$relative);
+                if (is_array($parts)) { unset($parts['scheme'],$parts['host']); $info['parts']=$parts; }
+            }
+        }
+        return $info;
+    }
     public static function analyze($content,$masked) {
-        // Also protect unfinished raw-text elements and comments in legacy HTML.
-        $masked=preg_replace_callback('~<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?(?:</\1\s*>|$)~i',function($m){return str_repeat(' ',strlen($m[0]));},$content);
-        preg_match_all('~'.self::TAG.'~',$masked,$tokens,PREG_OFFSET_CAPTURE);
+        $raw='<(script|style|textarea|pre|code)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\1\s*>|$)';
+        preg_match_all('~<!--[\s\S]*?(?:-->|$)|'.$raw.'|'.self::TAG.'~i',$content,$matches,PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
+        $tokens=array_map(function($m){return $m[0];},$matches);
         $stack=array();$links=array();$total=0;$changed=0;$edits=array();$reasons=array();
-        foreach($tokens[0] as $token) {
+        foreach($tokens as $token) {
             if(preg_match('~^<a(?=[\s/>])~i',$token[0])) {
-                $tag=substr($content,$token[1],strlen($token[0]));$info=OGO_MC_Engine::href_info($tag);
-                $target=self::candidate($info);if($target)++$total;
+                $tag=substr($content,$token[1],strlen($token[0]));$info=self::read_info($tag);
+                $target=self::candidate($info) || self::review_candidate($info);if($target)++$total;
                 $invalid=!empty($stack)||preg_match('~/\s*>$~',$tag);
                 if($stack)foreach($stack as &$open)$open['invalid']=true;
                 unset($open);
@@ -81,7 +151,7 @@ final class OGO_MC_Legacy {
         }
         foreach($stack as $open)if($open['target'])$reasons['незакрите посилання']=($reasons['незакрите посилання']??0)+1;
         foreach($links as $link){
-            list($url,$reason)=self::replacement($link['info']);
+            list($url,$reason)=self::legacy_replacement($link['info']);
             if($url===null){$reasons[$reason]=($reasons[$reason]??0)+1;continue;}
             if($url===$link['info']['raw']){$reasons['адреса не змінилася']=($reasons['адреса не змінилася']??0)+1;continue;}
             $edits[]=array($link['offset']+$link['info']['offset'],$link['info']['length'],$url);++$changed;
