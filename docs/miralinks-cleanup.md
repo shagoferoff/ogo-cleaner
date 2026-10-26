@@ -20,7 +20,9 @@ URL не заважають зняттю тега, якщо домен визн�
 
 1. Зробити актуальну резервну копію бази.
 2. У phpMyAdmin бази `ogo2023_ogo` імпортувати
-   [ogo-miralinks-clean.sql](../dist/ogo-miralinks-clean.sql).
+   [ogo-miralinks-clean.sql.gz](../dist/ogo-miralinks-clean.sql.gz) без розпакування.
+   Це gzip-копія [звичайного SQL](../dist/ogo-miralinks-clean.sql),
+   менша за типовий ліміт завантаження 2 МБ.
 3. Наприкінці запит покаже planned_articles, backed_up, skipped_before_backup,
    cleaned, original і changed_since_backup. Очікувано planned_articles=1923;
    cleaned=1923, якщо від експорту не було змін. Менша кількість означає
