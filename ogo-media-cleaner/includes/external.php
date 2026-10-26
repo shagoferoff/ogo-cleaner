@@ -5,7 +5,7 @@ require_once __DIR__.'/external-list.php';
 require_once __DIR__.'/audit-engine.php';
 /** Independent read-only report for the approved workbook article list. */
 final class OGO_MC_External {
-    private const VERSION='1.27.0';
+    private const VERSION='1.27.1';
     private const SCHEMA='1.0.0';
     private static function table() { global $wpdb; return $wpdb->prefix.'ogo_external_audit'; }
     public static function init() {
@@ -157,6 +157,7 @@ final class OGO_MC_External {
         if(!self::valid_run($run))wp_die('Невідомий запуск.');
         check_admin_referer('ogo_mc_external_export_'.$run);
         if(!self::state($run) || get_option('ogo_mc_external_schema')!==self::SCHEMA)wp_die('Звіт недоступний.');
+        if((self::state($run)['manifest']??'')!==OGO_MC_External_List::digest())wp_die('Звіт створено за попереднім списком, що міг включати приховані аркуші. Почніть нову ревізію та експортуйте її результат.');
         list($kind,$domain)=self::filters($_GET);$report=($_GET['report']??'')==='domains'?'domains':'details';
         global $wpdb;
         if($wpdb->query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ')===false || $wpdb->query('START TRANSACTION WITH CONSISTENT SNAPSHOT')===false)wp_die('Не вдалося відкрити узгоджений звіт.');
@@ -199,16 +200,17 @@ final class OGO_MC_External {
         <div class="wrap"><h1>OGO cleaner — Міралінкс: ревізія зовнішніх посилань</h1>
         <p><strong>Версія <?php echo esc_html(self::VERSION); ?>. Лише звіт: текст статей, метаполя anons і дати не змінюються.</strong></p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config)echo '<option value="'.esc_attr($key).'" '.selected('external_audit',$key,false).'>'.esc_html($config['label']).'</option>';?></select></label> <button class="button">Відкрити</button></form>
-        <p>Список із наданої таблиці: 2 520 унікальних ID ОГО — 2 218 із місячних вкладок і 302 з додаткових. Зелені записи та дев’ять незелених із приміткою «ВИДАЛИВ» виключені; повтори об’єднані. Повтор із суперечливою зеленою позначкою також виключено. Додаткові вкладки позначені в деталях і CSV.</p>
+        <p>Поточний список: 2 215 унікальних ID ОГО лише з 31 видимого місячного аркуша таблиці. Усі приховані аркуші повністю виключені. Зелені записи виключені; повтори об’єднані. Після оновлення почніть нову ревізію.</p>
         <p>Перевіряє лише a[href] у post_content цих статей. Поле anons не читає; інші статті, меню, віджети й метаполя не сканує. Підтримує http, https і //. Внутрішні адреси ogo.ua/ogo.rv.ua та їхніх піддоменів пропускає. my.rv.ua/volyninfo.com та їхні піддомени показує як пов’язані редакційні сайти. Зовнішнє посилання не оголошується рекламою автоматично. HTTP-перевірок немає.</p>
         <p>Порожні результати, відсутні ID, кошик та інші типи записів мають окремий статус. Коментарі, код, скрипти та голі URL пропускаються. Наявність запису за ID ще не підтверджує змістову відповідність статті таблиці: заголовок і адресу слід звірити у звіті.</p>
         <p><button class="button button-primary" id="ogo-audit-start">Нова ревізія</button> <button class="button" id="ogo-audit-scan" <?php disabled(empty($current['run'])||!empty($current['complete']));?>>Продовжити поточну ревізію</button> <button class="button" id="ogo-audit-stop">Зупинити після поточної порції</button></p>
         <p id="ogo-audit-progress" role="status" aria-live="polite">Перевірено ID: <?php echo (int)($current['scanned']??0); ?> із <?php echo count(OGO_MC_External_List::ids()); ?>. <?php echo !empty($current['complete'])?'Завершено.':'Можна продовжити сканування.';?></p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><input type="hidden" name="project" value="external_audit"><label>Запуск <select name="run"><?php foreach(get_option('ogo_mc_external_history',array()) as $id)if(self::valid_run($id)){$meta=self::state($id);echo '<option value="'.esc_attr($id).'" '.selected($run,$id,false).'>'.esc_html(($meta['started']??$id).' — '.(!empty($meta['complete'])?'завершено':'частково')).'</option>';}?></select></label> <label>Категорія <select name="kind"><option value="">Усі</option><?php foreach($labels as $key=>$label)echo '<option value="'.esc_attr($key).'" '.selected($kind,$key,false).'>'.esc_html($label).'</option>';?></select></label> <label>Звіт <select name="view"><option value="domains" <?php selected($view,'domains');?>>За доменами</option><option value="details" <?php selected($view,'details');?>>Статті та анкори</option></select></label> <button class="button">Показати</button></form>
         <?php if($s): ?>
+        <?php if(($s['manifest']??'')!==OGO_MC_External_List::digest())echo '<div class="notice notice-warning"><p>Історичний звіт за попереднім списком: він міг включати приховані аркуші. Його CSV-експорт заблоковано. Натисніть «Нова ревізія», щоб перевірити лише видимі аркуші.</p></div>'; ?>
         <p><strong><?php echo !empty($s['complete'])?'Завершений звіт':'Частковий звіт — сканування не завершене'; ?>.</strong> Перевірено ID: <?php echo (int)$s['scanned']; ?>. Адрес: <?php echo (int)$stats['totals']['urls']; ?>; посилань: <?php echo (int)$stats['totals']['links']; ?>; матеріалів із посиланнями: <?php echo (int)$stats['totals']['materials']; ?>. Дані на момент сканування; це список для оцінки, а не підтверджена реклама.</p>
         <?php foreach($stats['kinds'] as $row)echo '<p>'.esc_html($labels[$row['kind']].': '.$row['materials'].' матеріалів; '.$row['links'].' посилань.').'</p>'; ?>
-        <p><a class="button" href="<?php echo esc_url(self::export_url($run,'domains',$kind,''));?>">CSV — домени</a> <a class="button" href="<?php echo esc_url(self::export_url($run,'details',$kind,$domain));?>">CSV — статті, адреси й анкори</a></p>
+        <?php if(($s['manifest']??'')===OGO_MC_External_List::digest()): ?><p><a class="button" href="<?php echo esc_url(self::export_url($run,'domains',$kind,''));?>">CSV — домени</a> <a class="button" href="<?php echo esc_url(self::export_url($run,'details',$kind,$domain));?>">CSV — статті, адреси й анкори</a></p><?php endif;?>
         <?php if($view==='domains'): ?>
         <table class="widefat striped"><thead><tr><th>Домен</th><th>Статей</th><th>Адрес</th><th>Посилань</th></tr></thead><tbody>
         <?php foreach($rows as $r):?><tr><td><a href="<?php echo esc_url(self::url(array('run'=>$run,'kind'=>$r['domain']===''?'review':$kind,'domain'=>$r['domain'],'view'=>'details')));?>"><?php echo esc_html($r['domain']?:'[пошкоджена адреса]');?></a></td><td><?php echo (int)$r['materials'];?></td><td><?php echo (int)$r['urls'];?></td><td><?php echo (int)$r['links'];?></td></tr><?php endforeach;?>

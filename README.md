@@ -68,3 +68,6 @@ OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/missing-wordpress.php
 ```sh
 OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/external-wordpress.php
 ```
+
+У 1.27.1 список Міралінкс виправлено: тільки 31 видимий аркуш,
+2 215 ID. Приховані аркуші повністю виключені. Потрібна нова ревізія.

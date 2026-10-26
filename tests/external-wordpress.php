@@ -43,7 +43,7 @@ $r=ext_success(ext_request('scan',$run));
 ext_assert($r['state']['scanned']===50 && !$r['state']['complete'],'First request examines only 50 manifest IDs');
 $partial=OGO_MC_External::state($run);
 while(!$r['state']['complete'])$r=ext_success(ext_request('scan',$run));
-ext_assert($r['state']['scanned']===2520 && (int)$r['stats']['totals']['checked']===2520,'Every manifest ID gets a result including absent and empty records');
+ext_assert($r['state']['scanned']===2215 && (int)$r['stats']['totals']['checked']===2215,'Every manifest ID gets a result including absent and empty records');
 $stats=OGO_MC_External::stats($run);$table=$wpdb->prefix.'ogo_external_audit';
 ext_assert(!(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE run_id=%s AND (post_id=%d OR post_id=%d)",$run,$green,$outside)),'Green and unlisted articles never scanned');
 ext_assert(!(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE run_id=%s AND domain IN ('anons-only.example','ogo.ua')",$run)),'anons and internal URLs are absent from inventory');
@@ -65,7 +65,7 @@ try{$store->invoke(null,$run,107026,get_post(107026));}catch(RuntimeException $e
 remove_filter('query',$fail);$wpdb->suppress_errors(false);
 ext_assert($failed && OGO_MC_External::stats($run)===$stats,'Insert failure rolls back the per-article deletion');
 $details=OGO_MC_External::details($run,'','',5000);
-ext_assert(count($details)>500 && count(array_unique(array_column($details,'post_id')))===2520,'Detail export spans multiple chunks and covers the whole list');
+ext_assert(count($details)>500 && count(array_unique(array_column($details,'post_id')))===2215,'Detail export spans multiple chunks and covers the whole list');
 $domain_rows=OGO_MC_External::domains($run,'',1000);
 ext_assert(count($domain_rows)>500,'Domain export spans multiple chunks');
 $domain_keys=array();$after='';
@@ -93,6 +93,14 @@ $_GET=array('project'=>'external_audit','run'=>$run);ob_start();OGO_Media_Cleane
 ext_assert(strpos($html,'CSV — статті, адреси й анкори')!==false && strpos($html,'data-mode="apply"')===false,'UI has CSV export and no cleanup controls');
 $_GET=array('project'=>'external_audit','run'=>$run,'view'=>'details');ob_start();OGO_Media_Cleaner::page();$html=ob_get_clean();
 ext_assert(strpos($html,'anons')!==false && strpos($html,'Стаття')!==false,'Detail view explains the body-only scope');
+$original_state=OGO_MC_External::state($run);$obsolete=$original_state;$obsolete['manifest']='obsolete-list';update_option('ogo_mc_external_run_'.$run,$obsolete,false);
+$_GET=array('project'=>'external_audit','run'=>$run);ob_start();OGO_Media_Cleaner::page();$old_html=ob_get_clean();
+ext_assert(strpos($old_html,'CSV-експорт заблоковано')!==false && strpos($old_html,'CSV — статті, адреси й анкори')===false,'Obsolete-list report warns about hidden sheets and hides CSV buttons');
+$_GET=array('run'=>$run,'report'=>'details','_wpnonce'=>wp_create_nonce('ogo_mc_external_export_'.$run));$_REQUEST=$_GET;ob_start();$export_denied=false;
+try{OGO_MC_External::export();}catch(OGO_External_Test_Exit $e){$export_denied=true;}ob_end_clean();
+ext_assert($export_denied,'Direct export of an obsolete-list report is rejected');
+update_option('ogo_mc_external_run_'.$run,$original_state,false);
+
 ext_assert($wpdb->get_results("SELECT * FROM {$wpdb->posts} ORDER BY ID",ARRAY_A)===$posts_before,'All post fields and timestamps unchanged');
 ext_assert($wpdb->get_results("SELECT * FROM {$wpdb->postmeta} ORDER BY meta_id",ARRAY_A)===$meta_before,'All metadata including anons unchanged');
 $r=ext_success(ext_request('start'));ext_assert($r['state']['run']!==$run,'New run retains independent history');

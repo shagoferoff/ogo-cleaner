@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.27.0
+ * Version: 1.27.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -13,7 +13,7 @@ require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/external.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.27.0';
+    private const VERSION = '1.27.1';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -181,7 +181,7 @@ final class OGO_Media_Cleaner {
         wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
         ?>
         <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано «Міралінкс — ревізія зовнішніх посилань»: звіт за 2 520 ID із таблиці, лише основний текст статей. Поле anons не змінюється. Після оновлення натисніть «Нове сканування».</p>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано «Міралінкс — ревізія зовнішніх посилань»: звіт за 2 215 ID лише з видимих аркушів таблиці, лише основний текст статей. Поле anons не змінюється. Після оновлення натисніть «Нове сканування».</p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($ustream_mode): ?>

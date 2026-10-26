@@ -32,7 +32,8 @@ external_check($rows[0]['anchor_text']==='[посилання без текст�
 $oversize=OGO_MC_External_Engine::extract('<a href="https://'.str_repeat('a',254).'.example/">Помилка</a>');
 external_check($oversize[0]['kind']==='review' && $oversize[0]['domain']==='','Oversize host cannot overflow the report table');
 $groups=OGO_MC_External_List::groups();$ids=OGO_MC_External_List::ids();
-external_check(count($groups['monthly'])===2218 && count($groups['other'])===302 && count($ids)===2520 && count(array_unique($ids))===2520,'Workbook ID list matches the deduplicated/excluded worklist');
+external_check(count($groups['monthly'])===2215 && count($groups['other'])===0 && count($ids)===2215 && count(array_unique($ids))===2215,'Workbook ID list matches the deduplicated/excluded worklist');
+foreach(array(114709,115043,115424) as $hidden_id)external_check(!in_array($hidden_id,$ids,true),'Hidden monthly-sheet ID excluded');
 external_check(in_array(107026,$ids,true),'Example article is included');
 external_check(!in_array(94582,$ids,true),'Conflicting green duplicate is excluded');
 external_check(!in_array(113890,$ids,true),'Green March record is excluded');
