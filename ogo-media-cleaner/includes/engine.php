@@ -21,6 +21,7 @@ final class OGO_MC_Engine {
             'pets_urls' => array('label'=>'Домашні тварини — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'garden_urls' => array('label'=>'Дача, сад, город — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'horoscope_urls' => array('label'=>'Гороскоп — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
+            'legacy_missing' => array('label'=>'ОГО — відсутні статті: очищення', 'hosts'=>array('ogo.ua','www.ogo.ua','mail.ogo.ua','gazeta.ogo.ua'), 'photo_callouts'=>false),
             'legacy_urls' => array('label'=>'ОГО — старі URL → актуальні', 'hosts'=>array('ogo.ua','www.ogo.ua','mail.ogo.ua','gazeta.ogo.ua'), 'photo_callouts'=>false),
             'dossier_urls' => array('label'=>'Досьє ОГО → Рівняни', 'hosts'=>array('ogo.ua','www.ogo.ua','ogo.rv.ua','www.ogo.rv.ua'), 'photo_callouts'=>false),
             'vk' => array('label'=>'ВКонтакте — очищення посилань', 'hosts'=>array('vk.com','www.vk.com'), 'photo_callouts'=>false)
@@ -250,6 +251,7 @@ final class OGO_MC_Engine {
         if ($project === 'pets_urls') { require_once __DIR__.'/rubric.php'; return OGO_MC_Rubric::analyze($content, 'pets'); }
         if ($project === 'garden_urls') { require_once __DIR__.'/rubric.php'; return OGO_MC_Rubric::analyze($content, 'garden'); }
         if ($project === 'horoscope_urls') { require_once __DIR__.'/horoscope.php'; return OGO_MC_Horoscope::analyze($content); }
+        if ($project === 'legacy_missing') { require_once __DIR__.'/missing.php'; return OGO_MC_Missing::analyze($content); }
         if ($project === 'legacy_urls') { require_once __DIR__.'/legacy.php'; return OGO_MC_Legacy::analyze($content,$masked); }
         if ($project === 'dossier_urls') { require_once __DIR__.'/dossier.php'; return OGO_MC_Dossier::analyze($content,$masked); }
         if ($project === 'vk') { require_once __DIR__.'/vk.php'; return OGO_MC_VK::analyze($content,$masked); }

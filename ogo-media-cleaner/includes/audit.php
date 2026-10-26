@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/audit-engine.php';
 /** Audit data is isolated from the cleanup journal and from wp_posts writes. */
 final class OGO_MC_Audit {
-    private const VERSION = '1.25.0';
+    private const VERSION = '1.26.0';
     private const SCHEMA = '1.0.0';
     private const TYPES = array('post','page','rivnenschina','dovidka','phogo','press');
     private static function table() { global $wpdb; return $wpdb->prefix.'ogo_link_audit'; }

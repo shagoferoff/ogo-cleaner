@@ -18,6 +18,7 @@ php tests/woman.php
 php tests/audit.php
 php tests/editorial.php
 php tests/legacy.php
+php tests/missing.php
 node tests/audit-js.cjs
 ```
 
@@ -48,4 +49,10 @@ OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/editorial-wordpress.php
 
 ```sh
 OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/legacy-wordpress.php
+```
+
+Очищення посилань на відсутні статті: [docs/missing.md](docs/missing.md).
+
+```sh
+OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/missing-wordpress.php
 ```

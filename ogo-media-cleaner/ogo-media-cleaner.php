@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.25.0
+ * Version: 1.26.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/audit.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.25.0';
+    private const VERSION = '1.26.0';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -87,7 +87,7 @@ final class OGO_Media_Cleaner {
                 foreach ($posts as $p) {
                     $a=OGO_MC_Engine::analyze($p->post_content,$project);
                     if ($a['total']) {
-                        $ready=$a['removed'] && (!in_array($project,array('legacy_urls','media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
+                        $ready=$a['removed'] && (!in_array($project,array('legacy_missing','legacy_urls','media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
                         $ok=$wpdb->insert($t,array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??''));
                         if (!$ok) wp_send_json_error('Не вдалося записати звіт. Перезапустіть сканування.');
                     }
@@ -120,7 +120,7 @@ final class OGO_Media_Cleaner {
         if (!$p || !current_user_can('edit_post',$r->post_id)) { $wpdb->update($t,array('status'=>'conflict','message'=>'Матеріал відсутній або недостатньо прав.'),array('id'=>$r->id)); return; }
         require_once ABSPATH.'wp-admin/includes/post.php';
         if (wp_check_post_lock($r->post_id)) { $wpdb->update($t,array('status'=>'conflict','message'=>'Матеріал відкритий іншим редактором.'),array('id'=>$r->id)); return; }
-        if ($mode==='apply' && in_array($r->project??'',array('legacy_urls','nashregion_urls','woman_urls'),true)) {
+        if ($mode==='apply' && in_array($r->project??'',array('legacy_missing','legacy_urls','nashregion_urls','woman_urls'),true)) {
             require_once __DIR__.'/includes/legacy.php';
             OGO_MC_Legacy::clear_cache();
             $fresh=OGO_MC_Engine::analyze($r->before_content,$r->project);
@@ -164,7 +164,7 @@ final class OGO_Media_Cleaner {
         $unwrapping=in_array($project,array('catalog','media_unwrap'),true);
         $vk_mode=$project==='vk';
         $ustream_mode=$project==='ustream';
-        $count_label=$ustream_mode?'елементів для видалення/видалених':(($vk_mode || $project==='day')?'посилань для обробки/оброблених':($project==='gazeta'?'збігів для видалення/видалених':($unwrapping?'посилань для зняття/знятих':($replacing?'посилань для заміни/замінених':'посилань для видалення/видалених'))));
+        $count_label=$project==='legacy_missing'?'посилань для обробки/оброблених':($ustream_mode?'елементів для видалення/видалених':(($vk_mode || $project==='day')?'посилань для обробки/оброблених':($project==='gazeta'?'збігів для видалення/видалених':($unwrapping?'посилань для зняття/знятих':($replacing?'посилань для заміни/замінених':'посилань для видалення/видалених')))));
         $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):($s['run']??'');
         $page=max(1,absint($_GET['paged']??1));
         $rows=$wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE run_id=%s AND project=%s ORDER BY id LIMIT 20 OFFSET %d",$run,$project,($page-1)*20));
@@ -177,7 +177,7 @@ final class OGO_Media_Cleaner {
         wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
         ?>
         <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Розширено «ОГО — старі URL → актуальні»: розпізнає помилки формату й домену, визначає однозначний ID та перевіряє актуальну статтю WordPress. Невизначені випадки залишаються для ручної перевірки. Після оновлення натисніть «Нове сканування».</p>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано «ОГО — відсутні статті: очищення»: знімає посилання в реченнях і видаляє окремі блоки, якщо відповідної статті немає в базі. Архівні та неоднозначні адреси залишаються для перевірки. Після оновлення натисніть «Нове сканування».</p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($ustream_mode): ?>
@@ -218,6 +218,10 @@ final class OGO_Media_Cleaner {
         <?php elseif ($project==='horoscope_urls'): ?>
         <p>Замінює лише href посилань зі старої рубрики <code>https://ogo.ua/rubrics/view/goroskop</code> на тег <code>https://ogo.ua/tag/goroskop/</code>. Текст посилання (зокрема «ЩОДЕННИЙ ГОРОСКОП»), оформлення та інші атрибути зберігаються.</p>
         <p>Підтримує http, https, www, //, адреси від кореня сайту та кінцевий слеш. Параметри й фрагмент #… зберігаються. Інші рубрики, домени й уже актуальні посилання не змінює. Коментарі та блоки коду пропускає; вкладені й незакриті посилання залишає для перевірки. Матеріали з такими збігами потребують ручної перевірки.</p>
+        <?php elseif ($project==='legacy_missing'): ?>
+        <p>Спочатку перевіряє старі адреси /articles/ за однозначним ID у WordPress. Наявні публічні статті отримують актуальний URL. Якщо запису немає в базі, знімає теги a всередині речення, зберігаючи текст і форматування. Окремий абзац чи рядок, що містить лише одне таке текстове посилання, видаляє разом з простими обгортками p, div, span, font, strong та кінцевим br.</p>
+        <p>Не використовує HTTP 404 як доказ відсутності статті. Чернетки, кошик, захищені записи, інші типи записів, неоднозначні ID, складний або пошкоджений HTML — ручна перевірка. /archive/…/site/… також завжди вручну: ID цього архіву може вести на іншу статтю. Автоматичного пошуку за заголовком і вибору схожої статті немає.</p>
+        <p>Якщо в матеріалі є хоча б один необроблений збіг, масове очищення його пропускає. У журналі окремо вказано заміни URL, зняті посилання й видалені блоки. Перед застосуванням повторно перевіряє наявність статей; доступні «Було → стане» та відкат.</p>
         <?php elseif ($project==='legacy_urls'): ?>
         <p>Визначає ID зі старих адрес <code>/articles/view/…</code> та <code>/articles/дата/ID…</code>. Підтримує .html, .htm, відсутнє розширення, крапку після адреси, зайвий br наприкінці та вкладені/склеєні URL з одним і тим самим ID. Домени джерел: ogo.ua, mail.ogo.ua, gazeta.ogo.ua (також www, http, https, // та адреси від кореня). Запити до цих старих адрес не виконуються.</p>
         <p>Заміна відбувається лише за однозначним ID, коли WordPress знаходить доступну опубліковану статтю без пароля й повертає актуальний permalink. ID важливіший за помилкову дату в старому URL. Різні ID в одній адресі, невідомі суфікси, параметри URL, відсутні й закриті статті залишаються для перевірки з поясненням. Якщо матеріал має необроблені збіги, він не потрапляє до готових для масової заміни.</p>

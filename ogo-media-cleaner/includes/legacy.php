@@ -118,7 +118,7 @@ final class OGO_MC_Legacy {
         preg_match('/^\s*/',$info['raw'],$leading); preg_match('/\s*$/',$info['raw'],$trailing);
         return array($leading[0].$url.$trailing[0],null);
     }
-    private static function read_info($tag) {
+    public static function read_info($tag) {
         $info=OGO_MC_Engine::href_info($tag);
         if ($info && $info['parts']===false) {
             $relative=trim(html_entity_decode($info['raw'],ENT_QUOTES | ENT_HTML5,'UTF-8'));
@@ -128,6 +128,24 @@ final class OGO_MC_Legacy {
             }
         }
         return $info;
+    }
+    /** Local absence is the only automatic deletion criterion; HTTP 404 is not. */
+    public static function cleanup_decision($info) {
+        if (!$info || !is_array($info['parts'])) return array('ignore',null);
+        $p=$info['parts'];
+        if (preg_match('~^/archive/[^/]+/site/[^/]+/?$~i',$p['path'] ?? '')) {
+            $probe=$info; $probe['parts']['path']='/articles/view/2000-01-01/1.html';
+            if (self::candidate($probe)) return array('review','Архів /archive/…/site/…: відповідність ID не підтверджена');
+        }
+        if (!self::candidate($info) && !self::review_candidate($info)) return array('ignore',null);
+        list($id,$reason)=self::extract_id($info);
+        if ($id===null) return array('review',$reason);
+        $post=get_post($id);
+        global $wpdb;
+        if (isset($wpdb) && !empty($wpdb->last_error)) throw new RuntimeException('Помилка читання бази; відсутність статті не підтверджена.');
+        if (!$post) return array('missing','ID '.$id.': запису немає в базі');
+        list($url,$reason)=self::legacy_replacement($info);
+        return $url===null ? array('review',$reason) : array('replace',$url);
     }
     public static function analyze($content,$masked) {
         $raw='<(script|style|textarea|pre|code)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\1\s*>|$)';
