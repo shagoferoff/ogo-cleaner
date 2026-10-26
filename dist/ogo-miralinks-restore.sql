@@ -1,0 +1,5 @@
+-- OGO Miralinks rollback. Restores exact original bytes from the backup table.
+-- Later edits/status/date changes are never overwritten. Backup is retained.
+UPDATE `ogo2023_ogo`.`wp_posts` p JOIN `ogo2023_ogo`.`wp_ogo_miralinks_backup_de0a5dfdeb16` b ON p.ID=b.post_id SET p.post_content=CONVERT(b.before_content USING utf8mb4) WHERE p.post_type='post' AND p.post_status=b.post_status AND p.post_date=b.post_date AND SHA2(b.before_content,256)=b.before_sha256 AND SHA2(BINARY p.post_content,256)=b.after_sha256;
+COMMIT;
+SELECT 1923 AS planned_articles,COUNT(*) AS backed_up,1923-COUNT(*) AS skipped_before_backup,COALESCE(SUM(SHA2(BINARY p.post_content,256)=b.after_sha256),0) AS cleaned,COALESCE(SUM(SHA2(BINARY p.post_content,256)=b.before_sha256),0) AS original,COALESCE(SUM(p.ID IS NOT NULL AND SHA2(BINARY p.post_content,256) NOT IN (b.before_sha256,b.after_sha256)),0) AS changed_since_backup FROM `ogo2023_ogo`.`wp_ogo_miralinks_backup_de0a5dfdeb16` b LEFT JOIN `ogo2023_ogo`.`wp_posts` p ON p.ID=b.post_id;
