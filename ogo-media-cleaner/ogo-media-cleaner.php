@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.26.0
+ * Version: 1.26.1
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/audit.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.26.0';
+    private const VERSION = '1.26.1';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
