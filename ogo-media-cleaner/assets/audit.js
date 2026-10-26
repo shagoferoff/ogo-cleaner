@@ -7,7 +7,7 @@
   let busy = false, stopping = false, run = ogoAudit.run;
   stop.addEventListener('click', () => { stopping = true; });
   async function request(mode) {
-    const body = new URLSearchParams({action:'ogo_mc_audit', nonce:ogoAudit.nonce, mode, run});
+    const body = new URLSearchParams({action:ogoAudit.action || 'ogo_mc_audit', nonce:ogoAudit.nonce, mode, run});
     const response = await fetch(ogoAudit.url, {method:'POST', body, credentials:'same-origin'});
     const result = await response.json();
     if (!result.success) throw new Error(typeof result.data === 'string' ? result.data : 'Помилка сервера.');

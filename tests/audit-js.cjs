@@ -2,7 +2,7 @@ const fs = require('fs');
 const vm = require('vm');
 const assert = require('assert');
 const source = fs.readFileSync(__dirname + '/../ogo-media-cleaner/assets/audit.js', 'utf8');
-async function scenario({responses, stoppingAt = -1, mode = 'start', initialRun = ''}) {
+async function scenario({responses, stoppingAt = -1, mode = 'start', initialRun = '', action = ''}) {
   const elements = new Map();
   for (const id of ['ogo-audit-start','ogo-audit-scan','ogo-audit-stop','ogo-audit-progress']) {
     elements.set(id, {disabled:false, textContent:'', addEventListener(type, fn) {this[type] = fn;}});
@@ -10,7 +10,7 @@ async function scenario({responses, stoppingAt = -1, mode = 'start', initialRun 
   const requests = []; let redirect;
   const context = {
     document:{getElementById:id=>elements.get(id)},
-    ogoAudit:{url:'/ajax',nonce:'test-nonce',run:initialRun,reportUrl:'https://ogo.test/tools.php?page=ogo-media-cleaner&project=audit'},
+    ogoAudit:{action,url:'/ajax',nonce:'test-nonce',run:initialRun,reportUrl:'https://ogo.test/tools.php?page=ogo-media-cleaner&project=audit'},
     URL, URLSearchParams, confirm:()=>true,
     window:{location:{href:'https://ogo.test/tools.php',assign:url=>{redirect=url;}}},
     fetch:async (url, options)=>{
@@ -45,5 +45,7 @@ const response = (complete, scanned=0) => ({success:true,data:{state:{run:'test-
   r = await scenario({responses:[new Error('Network unavailable')]});
   assert.ok(!r.redirect && r.elements.get('ogo-audit-progress').textContent.includes('Network unavailable'));
   assert.strictEqual(r.elements.get('ogo-audit-start').disabled,false);
+  r = await scenario({responses:[response(false),response(true,50)],action:'ogo_mc_external'});
+  assert.ok(r.requests.every(x=>x.action==='ogo_mc_external' && x.nonce==='test-nonce'));
   console.log('Passed audit browser-flow checks: scan, resume, stop, stale run and network errors.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -19,6 +19,7 @@ php tests/audit.php
 php tests/editorial.php
 php tests/legacy.php
 php tests/missing.php
+php tests/external.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```
@@ -61,3 +62,9 @@ OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/missing-wordpress.php
 Версія 1.26.1 спрощує таблицю підтверджень у `assets/admin.js`.
 Спрацювання Defender на 1.26.0 не підтверджене як хибне; перевірка вихідного
 коду та збіг SHA-256 не замінюють перевірки Microsoft Defender.
+
+Ревізія реклами за Excel-списком: [docs/external.md](docs/external.md).
+
+```sh
+OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/external-wordpress.php
+```
