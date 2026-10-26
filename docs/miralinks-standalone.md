@@ -1,5 +1,11 @@
 # OGO Miralinks Audit 1.0.0
 
+Після публікації користувач також повідомив про Defender
+Trojan:Script/Ulthar.A!ml на `assets/scan.js`. Причина не встановлена.
+Окрема збірка проблему виявлення не вирішила. Поточний шлях отримання
+даних — [SELECT-only SQL для 2215 статей](../dist/ogo-miralinks-visible-export.sql)
+та експорт результату запиту як CSV із phpMyAdmin.
+
 Окремий вузький плагін для поточного етапу: read-only ревізія зовнішніх
 посилань у 2215 статтях із видимих аркушів Excel. Архів містить тільки
 `ogo-miralinks-audit/`. Основний OGO cleaner не змінено.

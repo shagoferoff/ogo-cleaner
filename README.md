@@ -74,3 +74,9 @@ OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/external-wordpress.php
 
 Окремий плагін лише для ревізії: [OGO Miralinks Audit](docs/miralinks-standalone.md),
 код `ogo-miralinks-audit/`, ZIP `dist/ogo-miralinks-audit-1.0.0.zip`.
+
+Якщо Defender блокує JavaScript плагіна, для ревізії можна отримати
+ті самі 2 215 текстів через [SELECT-only SQL](dist/ogo-miralinks-visible-export.sql):
+phpMyAdmin → SQL → виконати запит → експортувати результат як CSV.
+Запит не читає anons і не змінює дані. Це поточний шлях отримання даних,
+поки причина спрацювання Defender на admin.js/scan.js не встановлена.
