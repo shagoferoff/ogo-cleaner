@@ -71,3 +71,6 @@ OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/external-wordpress.php
 
 У 1.27.1 список Міралінкс виправлено: тільки 31 видимий аркуш,
 2 215 ID. Приховані аркуші повністю виключені. Потрібна нова ревізія.
+
+Окремий плагін лише для ревізії: [OGO Miralinks Audit](docs/miralinks-standalone.md),
+код `ogo-miralinks-audit/`, ZIP `dist/ogo-miralinks-audit-1.0.0.zip`.
