@@ -12,6 +12,7 @@ final class OGO_MC_Engine {
             'blog' => array('label'=>'Блоги', 'hosts'=>array('blog.ogo.ua','www.blog.ogo.ua'), 'photo_callouts'=>false),
             'day' => array('label'=>'Рівне святкове — очищення посилань', 'hosts'=>array('day.ogo.ua'), 'photo_callouts'=>false),
             'day_urls' => array('label'=>'Рівне святкове — заміна URL', 'hosts'=>array('day.ogo.ua'), 'photo_callouts'=>false),
+            'gazeta_sources' => array('label'=>'Рівненська газета — підписи джерела', 'hosts'=>array('gazeta.rv.ua','www.gazeta.rv.ua'), 'photo_callouts'=>false),
             'gazeta' => array('label'=>'Рівненська газета', 'hosts'=>array('gazeta.rv.ua','www.gazeta.rv.ua'), 'photo_callouts'=>false),
             'catalog' => array('label'=>'Каталог — зняття посилань', 'hosts'=>array('catalog.ogo.ua'), 'photo_callouts'=>false),
             'ustream' => array('label'=>'Ustream — видалення плеєрів і підписів', 'hosts'=>array('ustream.tv','www.ustream.tv'), 'photo_callouts'=>false),
@@ -257,6 +258,7 @@ final class OGO_MC_Engine {
         if ($project === 'dossier_urls') { require_once __DIR__.'/dossier.php'; return OGO_MC_Dossier::analyze($content,$masked); }
         if ($project === 'vk') { require_once __DIR__.'/vk.php'; return OGO_MC_VK::analyze($content,$masked); }
         if (in_array($project,array('catalog','media_unwrap'),true)) return self::unwrap_links($content, $masked, $project);
+        if ($project === 'gazeta_sources') { require_once __DIR__.'/gazeta-sources.php'; return OGO_MC_Gazeta_Sources::analyze($content); }
         if ($project === 'gazeta' && !$base_rules) { require_once __DIR__.'/gazeta.php'; return OGO_MC_Gazeta::analyze($content,$masked); }
         if ($project === 'day_urls') return self::replace_day_urls($content, $masked);
         if ($project === 'day') { require_once __DIR__.'/day.php'; return OGO_MC_Day::analyze($content); }

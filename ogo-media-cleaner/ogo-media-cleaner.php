@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.28.0
+ * Version: 1.29.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -13,7 +13,7 @@ require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/external.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.28.0';
+    private const VERSION = '1.29.0';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -90,7 +90,7 @@ final class OGO_Media_Cleaner {
                 foreach ($posts as $p) {
                     $a=OGO_MC_Engine::analyze($p->post_content,$project);
                     if ($a['total']) {
-                        $ready=$a['removed'] && (!in_array($project,array('legacy_missing','legacy_urls','media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
+                        $ready=$a['removed'] && (!in_array($project,array('gazeta_sources','legacy_missing','legacy_urls','media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
                         $ok=$wpdb->insert($t,array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??''));
                         if (!$ok) wp_send_json_error('Не вдалося записати звіт. Перезапустіть сканування.');
                     }
@@ -165,7 +165,7 @@ final class OGO_Media_Cleaner {
         if (!self::valid_project($project)) $project='media';
         $s=self::state($project); $projects=OGO_MC_Engine::projects();
         $replacing=in_array($project,array('day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true);
-        $unwrapping=in_array($project,array('catalog','media_unwrap'),true);
+        $unwrapping=in_array($project,array('catalog','media_unwrap','gazeta_sources'),true);
         $vk_mode=$project==='vk';
         $ustream_mode=$project==='ustream';
         $count_label=$project==='legacy_missing'?'посилань для обробки/оброблених':($ustream_mode?'елементів для видалення/видалених':(($vk_mode || $project==='day')?'посилань для обробки/оброблених':($project==='gazeta'?'збігів для видалення/видалених':($unwrapping?'посилань для зняття/знятих':($replacing?'посилань для заміни/замінених':'посилань для видалення/видалених')))));
@@ -181,7 +181,7 @@ final class OGO_Media_Cleaner {
         wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
         ?>
         <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Інструмент доступний адміністраторам і редакторам. Очищення та відкат додатково перевіряють право редагувати кожен матеріал. Після оновлення натисніть «Нове сканування».</p>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано «Рівненська газета — підписи джерела»: знімає посилання з назви газети після «За матеріалами», залишаючи весь текст. Доступ адміністратора та редактора збережено. Після оновлення натисніть «Нове сканування».</p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($ustream_mode): ?>
@@ -191,6 +191,9 @@ final class OGO_Media_Cleaner {
         <?php elseif ($vk_mode): ?>
         <p>Знімає посилання на точні домени <code>vk.com</code> і <code>www.vk.com</code> зі збереженням імен, назв груп, джерел, оформлення та іншого тексту. <code>vovk.com</code> не змінює.</p>
         <p>У простих списках «Або ж пишіть нам у соцмережах…» прибирає пункти ВК та роздільники, залишаючи Facebook. Видаляє окремий абзац «Група зустрічі: vk.com/…» і впізнаний абзац конкурсу книг із двома наведеними email. Інші конкурси автоматично не видаляє. Посилання з голою адресою ВК, складні списки й неоднозначні шаблони залишає для перевірки. Результат кожного правила видно в журналі.</p>
+        <?php elseif ($project==='gazeta_sources'): ?>
+        <p>Перетворює <code>За матеріалами &lt;a href="http://gazeta.rv.ua/"&gt;"Рівненської газети"&lt;/a&gt;</code> на <code>За матеріалами "Рівненської газети"</code>. Так само обробляє посилання на статті gazeta.rv.ua з будь-яким шляхом: ID та дату не перевіряє, бо знімає саме посилання.</p>
+        <p>Домени gazeta.rv.ua / www.gazeta.rv.ua, http, https і //. Знімає тільки теги a у впізнаному підписі джерела. Лапки, текст, форматування, абзаци та інші посилання зберігаються. Інші назви джерел, вкладені й незакриті посилання потребують перевірки. Матеріали з неоднозначними збігами не застосовуються масово.</p>
         <?php elseif ($unwrapping): ?>
         <?php if ($project==='media_unwrap'): ?><p><strong>Спочатку виконайте очищення в режимі «Медіа».</strong> Після нього запустіть нове сканування цієї окремої операції. Вона знімає решту посилань media.ogo.ua / www.media.ogo.ua зі збереженням тексту, включно з посиланнями всередині речень. Запрошення до галерей тут не видаляються: перевіряйте попередній перегляд, щоб не залишити беззмістовний текст. Якщо після зняття посилань лишиться гола згадка домену, матеріал піде в ручну перевірку.</p><?php endif; ?>
         <p>Знімає лише оболонку <code>&lt;a href="…"&gt;…&lt;/a&gt;</code> з посилань на точний домен <code><?php echo esc_html(implode(", ",$projects[$project]["hosts"])); ?></code> через http, https або //. Текст, абзаци, пробіли, вкладене жирне оформлення та зображення зберігаються. Стилі самого посилання видаляються разом із тегом a. Інші посилання не змінює; незакриті чи вкладені посилання залишає для перевірки.</p>

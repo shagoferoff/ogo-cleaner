@@ -5,7 +5,7 @@ require_once __DIR__.'/external-list.php';
 require_once __DIR__.'/audit-engine.php';
 /** Independent read-only report for the approved workbook article list. */
 final class OGO_MC_External {
-    private const VERSION='1.28.0';
+    private const VERSION='1.29.0';
     private const SCHEMA='1.0.0';
     private static function table() { global $wpdb; return $wpdb->prefix.'ogo_external_audit'; }
     public static function init() {
