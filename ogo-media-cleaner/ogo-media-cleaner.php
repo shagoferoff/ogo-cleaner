@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO cleaner
  * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.27.1
+ * Version: 1.28.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -13,7 +13,7 @@ require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/external.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.27.1';
+    private const VERSION = '1.28.0';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -48,7 +48,7 @@ final class OGO_Media_Cleaner {
     public static function init() {
         OGO_MC_Audit::init();
         OGO_MC_External::init();
-        add_action('admin_menu', function(){ add_management_page('OGO cleaner','OGO cleaner','manage_options','ogo-media-cleaner',array(__CLASS__,'page')); });
+        add_action('admin_menu', function(){ add_management_page('OGO cleaner','OGO cleaner','edit_others_posts','ogo-media-cleaner',array(__CLASS__,'page')); });
         add_action('admin_init',function(){ if (current_user_can('manage_options') && get_option('ogo_mc_schema')!=='1.3.0') self::activate(); });
         add_action('wp_ajax_ogo_mc',array(__CLASS__,'ajax'));
     }
@@ -60,7 +60,7 @@ final class OGO_Media_Cleaner {
         return $wpdb->get_results($wpdb->prepare("SELECT status,COUNT(*) AS materials,SUM(removed) AS links,SUM(review) AS review FROM $t WHERE run_id=%s AND project=%s GROUP BY status",$run,$project),ARRAY_A);
     }
     public static function ajax() {
-        if (!current_user_can('manage_options')) wp_send_json_error('Недостатньо прав.',403);
+        if (!current_user_can('edit_others_posts')) wp_send_json_error('Недостатньо прав.',403);
         check_ajax_referer('ogo_mc','nonce');
         global $wpdb; $t=self::table(); $mode=sanitize_key($_POST['mode'] ?? '');
         $project=sanitize_key(wp_unslash($_POST['project']??'media'));
@@ -156,7 +156,7 @@ final class OGO_Media_Cleaner {
         }
     }
     public static function page() {
-        if (!current_user_can('manage_options')) return;
+        if (!current_user_can('edit_others_posts')) return;
         if (sanitize_key(wp_unslash($_GET['project']??''))==='external_audit') { OGO_MC_External::page(); return; }
         if (sanitize_key(wp_unslash($_GET['project']??''))==='audit') { OGO_MC_Audit::page(); return; }
         if (get_option('ogo_mc_schema')!=='1.3.0') { echo '<div class="notice notice-error"><p>Не вдалося оновити таблицю журналу. Очищення недоступне. Перевірте права користувача бази на зміну таблиць.</p></div>'; return; }
@@ -181,7 +181,7 @@ final class OGO_Media_Cleaner {
         wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
         ?>
         <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Додано «Міралінкс — ревізія зовнішніх посилань»: звіт за 2 215 ID лише з видимих аркушів таблиці, лише основний текст статей. Поле anons не змінюється. Після оновлення натисніть «Нове сканування».</p>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Інструмент доступний адміністраторам і редакторам. Очищення та відкат додатково перевіряють право редагувати кожен матеріал. Після оновлення натисніть «Нове сканування».</p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($ustream_mode): ?>

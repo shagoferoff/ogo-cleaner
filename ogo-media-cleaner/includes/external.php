@@ -5,7 +5,7 @@ require_once __DIR__.'/external-list.php';
 require_once __DIR__.'/audit-engine.php';
 /** Independent read-only report for the approved workbook article list. */
 final class OGO_MC_External {
-    private const VERSION='1.27.1';
+    private const VERSION='1.28.0';
     private const SCHEMA='1.0.0';
     private static function table() { global $wpdb; return $wpdb->prefix.'ogo_external_audit'; }
     public static function init() {
@@ -79,7 +79,7 @@ final class OGO_MC_External {
         return array('totals'=>$totals,'kinds'=>$kinds);
     }
     public static function ajax() {
-        if(!current_user_can('manage_options'))wp_send_json_error('Недостатньо прав.',403);
+        if(!current_user_can('edit_others_posts'))wp_send_json_error('Недостатньо прав.',403);
         check_ajax_referer('ogo_mc_external','nonce');
         if(get_option('ogo_mc_external_schema')!==self::SCHEMA)wp_send_json_error('Таблиця ревізії недоступна. Оновіть сторінку й перевірте права бази.');
         $mode=sanitize_key($_POST['mode']??'');
@@ -152,7 +152,7 @@ final class OGO_MC_External {
         return wp_nonce_url(add_query_arg(array('action'=>'ogo_mc_external_export','run'=>$run,'report'=>$report,'kind'=>$kind,'domain'=>$domain),admin_url('admin-post.php')),'ogo_mc_external_export_'.$run);
     }
     public static function export() {
-        if(!current_user_can('manage_options'))wp_die('Недостатньо прав.','',array('response'=>403));
+        if(!current_user_can('edit_others_posts'))wp_die('Недостатньо прав.','',array('response'=>403));
         $run=sanitize_text_field(wp_unslash($_GET['run']??''));
         if(!self::valid_run($run))wp_die('Невідомий запуск.');
         check_admin_referer('ogo_mc_external_export_'.$run);
@@ -185,7 +185,7 @@ final class OGO_MC_External {
         fclose($stream);$wpdb->query('COMMIT');exit;
     }
     public static function page() {
-        if(!current_user_can('manage_options'))return;
+        if(!current_user_can('edit_others_posts'))return;
         if(get_option('ogo_mc_external_schema')!==self::SCHEMA){echo '<div class="notice notice-error"><p>Не вдалося створити таблицю ревізії. Перевірте права бази на створення таблиць InnoDB.</p></div>';return;}
         $current=self::state();$run=sanitize_text_field(wp_unslash($_GET['run']??($current['run']??'')));if(!self::valid_run($run))$run='';
         $s=$run!==''?self::state($run):array();list($kind,$domain)=self::filters($_GET);$page=max(1,absint($_GET['paged']??1));

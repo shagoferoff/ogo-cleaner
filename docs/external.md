@@ -59,7 +59,7 @@ private, draft, pending, future. Кошик та інші типи не розб
 за іншим списком показуються з попередженням, а їхній CSV-експорт заблоковано.
 Після оновлення необхідна «Нова ревізія».
 
-Окремі AJAX `ogo_mc_external` і admin-post `ogo_mc_external_export`, manage_options
+Окремі AJAX `ogo_mc_external` і admin-post `ogo_mc_external_export`, edit_others_posts (адміністратор/редактор)
 і nonce. Доступні тільки start/scan; apply/restore відхиляються. Загальний
 контролер очищення та Engine::analyze також відхиляють `external_audit`.
 Жоден шлях цієї операції не змінює posts/postmeta. Старі режими не змінено.

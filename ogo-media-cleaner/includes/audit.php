@@ -3,7 +3,7 @@ if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/audit-engine.php';
 /** Audit data is isolated from the cleanup journal and from wp_posts writes. */
 final class OGO_MC_Audit {
-    private const VERSION = '1.27.1';
+    private const VERSION = '1.28.0';
     private const SCHEMA = '1.0.0';
     private const TYPES = array('post','page','rivnenschina','dovidka','phogo','press');
     private static function table() { global $wpdb; return $wpdb->prefix.'ogo_link_audit'; }
@@ -68,7 +68,7 @@ final class OGO_MC_Audit {
         } catch (Throwable $e) { $wpdb->query('ROLLBACK'); throw $e; }
     }
     public static function ajax() {
-        if (!current_user_can('manage_options')) wp_send_json_error('Недостатньо прав.',403);
+        if (!current_user_can('edit_others_posts')) wp_send_json_error('Недостатньо прав.',403);
         check_ajax_referer('ogo_mc_audit','nonce');
         if (!self::ready()) wp_send_json_error('Таблиця ревізії недоступна. Оновіть сторінку; перевірте права бази на створення таблиці.');
         $mode = sanitize_key($_POST['mode'] ?? '');
@@ -150,7 +150,7 @@ final class OGO_MC_Audit {
         return wp_nonce_url(add_query_arg(array('action'=>'ogo_mc_audit_export','run'=>$run,'kind'=>$kind,'category'=>$category,'group'=>$group),admin_url('admin-post.php')), 'ogo_mc_audit_export_'.$run);
     }
     public static function export() {
-        if (!current_user_can('manage_options')) wp_die('Недостатньо прав.', '', array('response'=>403));
+        if (!current_user_can('edit_others_posts')) wp_die('Недостатньо прав.', '', array('response'=>403));
         $run = sanitize_text_field(wp_unslash($_GET['run'] ?? ''));
         if (!self::valid_run($run)) wp_die('Невідомий запуск.');
         check_admin_referer('ogo_mc_audit_export_'.$run);
@@ -188,7 +188,7 @@ final class OGO_MC_Audit {
         fclose($stream); $wpdb->query('COMMIT'); exit;
     }
     public static function page() {
-        if (!current_user_can('manage_options')) return;
+        if (!current_user_can('edit_others_posts')) return;
         if (!self::ready()) { echo '<div class="notice notice-error"><p>Не вдалося створити таблицю ревізії. Перевірте права бази даних на створення таблиць InnoDB.</p></div>'; return; }
         $current = self::state();
         $run = sanitize_text_field(wp_unslash($_GET['run'] ?? ($current['run'] ?? '')));
