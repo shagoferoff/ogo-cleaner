@@ -12,7 +12,7 @@ final class OGO_MC_Gazeta {
         if(strpos($html,'<!--')!==false || strpos(self::plain($html),'[')!==false) return false;
         preg_match_all('~'.self::TAG.'~',$html,$tags);$stack=array();
         foreach($tags[0] as $tag) {
-            if(!preg_match('~^<(/?)(a|strong|b|em|i|span|u|s|small|br)(?=[\s/>])~i',$tag,$m))return false;
+            if(!preg_match('~^<(/?)(a|strong|b|em|i|span|u|s|small|font|br)(?=[\s/>])~i',$tag,$m))return false;
             $name=strtolower($m[2]);
             if($name==='br' && !$m[1])continue;
             if($m[1]){if(array_pop($stack)!==$name)return false;}
@@ -43,10 +43,11 @@ final class OGO_MC_Gazeta {
     }
     private static function markers($content) {
         $count=0;
-        $rest=preg_replace_callback(self::ANCHOR,function($m)use(&$count){
-            if(OGO_MC_Engine::target($m[0],'gazeta')) {++$count;return '';}
-            if(OGO_MC_Engine::email_target($m[0],'gazeta.rv.ua@gmail.com')) {++$count;return '';}
-            return $m[0];
+        // Tokenize complete HTML tags so fake anchors inside quoted attributes
+        // cannot become matches. Opaque code/comment bodies are excluded too.
+        $rest=preg_replace_callback('~<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|pre|code)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\\1\s*>|$)|'.self::TAG.'~i',function($m)use(&$count){
+            if(OGO_MC_Engine::target($m[0],'gazeta') || OGO_MC_Engine::email_target($m[0],'gazeta.rv.ua@gmail.com'))++$count;
+            return ' ';
         },$content);
         $plain=self::plain($rest);
         $count+=preg_match_all('/(?<![\pL\pN_.+-])gazeta\.rv\.ua@gmail\.com(?![\pL\pN_-]|\.[\pL\pN])/iu',$plain);
@@ -97,7 +98,7 @@ final class OGO_MC_Gazeta {
                     $records[]=array('unit'=>$id,'start'=>$u['offset']+$cursor,'end'=>$u['offset']+$token[1]+strlen($token[0]),'html'=>$html,'kind'=>self::kind($html));
                     $cursor=$token[1]+strlen($token[0]);continue;
                 }
-                if(preg_match('~^<(/?)(a|strong|b|em|i|span|u|s|small)(?=[\s/>])~i',$token[0],$m)) {
+                if(preg_match('~^<(/?)(a|strong|b|em|i|span|u|s|small|font)(?=[\s/>])~i',$token[0],$m)) {
                     if($m[1]) {if($stack && end($stack)===strtolower($m[2]))array_pop($stack);}
                     else $stack[]=strtolower($m[2]);
                 }
@@ -168,18 +169,13 @@ final class OGO_MC_Gazeta {
             $email_ranges[]=array($u['start'],$u['end']);++$email_paragraphs;
         }
         $after=self::remove_ranges($after,$email_ranges);
-        $link_ranges=array();$link_count=0;
-        foreach(self::units($after) as $u) {
-            if(!empty($u['barrier']) || !self::safe($u['inner']))continue;
-            $blocked=false;
-            foreach($protected as $uid=>$ignored)if(self::normalized($units[$uid]['inner'])!=='' && (strpos($units[$uid]['inner'],$u['inner'])!==false || strpos($u['inner'],$units[$uid]['inner'])!==false))$blocked=true;
-            if($blocked)continue;
-            $base=OGO_MC_Engine::analyze($u['inner'],'gazeta',true);
-            if($base['removed'] && self::normalized($base['after'])==='') {$link_ranges[]=array($u['start'],$u['end']);$link_count+=$base['removed'];}
-        }
-        $after=self::remove_ranges($after,$link_ranges);
+        require_once __DIR__.'/gazeta-links.php';
+        $protected_texts=array();
+        foreach($protected as $uid=>$ignored)$protected_texts[]=$units[$uid]['inner'];
+        $links=OGO_MC_Gazeta_Links::analyze($after,$protected_texts);
+        $after=$links['after'];
         $total=self::markers($masked);$remaining=self::markers(self::mask($after));
         return array('after'=>$after,'total'=>$total,'removed'=>max(0,$total-$remaining),'review'=>$remaining,'fragments'=>array(),
-            'summary'=>'Правило 3 — контактних блоків: '.$blocks.'; правило 1 — абзаців з email: '.$email_paragraphs.'; правило 2 — посилань: '.$link_count.'.');
+            'summary'=>'Контактних блоків: '.$blocks.'; абзаців з email: '.$email_paragraphs.'. '.$links['summary']);
     }
 }

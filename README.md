@@ -11,7 +11,7 @@ WordPress-плагін OGO cleaner; код у `ogo-media-cleaner/`, готові
 ```sh
 php tests/horoscope.php
 php tests/garden.php
-php tests/gazeta-sources.php
+php tests/gazeta.php
 php tests/pets.php
 php tests/dim.php
 php tests/nashregion.php
@@ -90,8 +90,8 @@ phpMyAdmin → SQL → виконати запит → експортувати 
 Доступ для редакторів: [docs/editor-access.md](docs/editor-access.md).
 Релізи: OGO cleaner 1.28.0 та OGO Miralinks Audit 1.1.0.
 
-Підписи джерела «За матеріалами Рівненської газети»: [docs/gazeta-sources.md](docs/gazeta-sources.md).
+Рівненська газета: посилання в тексті, окремі заклики та контактні блоки: [docs/gazeta.md](docs/gazeta.md).
 
 ```sh
-OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/gazeta-sources-wordpress.php
+OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/gazeta-wordpress.php
 ```
