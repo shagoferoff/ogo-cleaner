@@ -1,11 +1,16 @@
 === OGO Tag Manager ===
 Contributors: OGO
 Requires PHP: 7.4
-Stable tag: 3.8.0
+Stable tag: 3.8.1
 
 Tag auditing, reversible staged relationship migration, slug change batches and CSV redirect plans.
 
 == Changelog ==
+
+= 3.8.1 =
+* Added a second CSV download button beside the active redirects list.
+* Clarified that pair discovery uses existing tags only and never creates new tags.
+
 
 = 3.8.0 =
 * New default Ukrainian guided page for singular/plural tag merging and bulk Cyrillic slug transliteration.

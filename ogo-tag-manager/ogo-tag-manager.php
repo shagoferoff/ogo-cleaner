@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Tag Manager
  * Description: Guided tag merging, Cyrillic slug transliteration, automatic 301 redirects and reversible migration.
- * Version: 3.8.0
+ * Version: 3.8.1
  * Author: OGO
  * Requires PHP: 7.4
  */
