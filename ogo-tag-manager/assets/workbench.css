@@ -1,0 +1,11 @@
+.ogo-toolbar{position:sticky;top:32px;z-index:10;background:#fff;border:1px solid #c3c4c7;padding:12px;margin:16px 0;box-shadow:0 2px 4px #0000000d}
+.ogo-toolbar .button{margin:3px}.ogo-progress{margin:8px 0;font-weight:600;white-space:pre-wrap}
+.ogo-slug-input{width:100%;max-width:330px}.ogo-confirm{display:block;margin:16px 0}
+#ogo-slug-preview:not(:empty){border:1px solid #72aee6;background:#f0f6fc;padding:16px;margin:20px 0}
+#ogo-slug-preview li{margin:8px 0}.ogo-slug-job{padding:14px;margin:12px 0;background:#fff;border:1px solid #c3c4c7}
+.ogo-slug-job summary{cursor:pointer;font-weight:600}.ogo-slug-job code{overflow-wrap:anywhere}.ogo-check-result{margin:8px 0;font-weight:600}
+.ogo-smart-results{min-height:34px}.ogo-smart-select{width:100%;max-width:580px}
+.ogo-working .wrap form button[type="submit"],.ogo-working .wrap form button:not([type]){pointer-events:none;opacity:.6}
+[hidden]{display:none!important}@media(max-width:782px){.ogo-toolbar{top:46px;position:relative}.ogo-slug-input{min-width:130px}}
+
+#ogo-live-status{position:fixed;right:20px;bottom:20px;z-index:100000;max-width:min(650px,calc(100vw - 40px));box-shadow:0 3px 18px #0002;margin:0}
