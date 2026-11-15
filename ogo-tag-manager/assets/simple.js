@@ -6,9 +6,9 @@
  async function api(op, data = {}) {
   let response;
   try { response = await fetch(OGO_SIMPLE.ajax, {method:'POST', credentials:'same-origin', body:new URLSearchParams({action:'ogo_tm_simple', nonce:OGO_SIMPLE.nonce, op, ...data})}); }
-  catch (_) { throw new Error('З’єднання перервалося. Оновіть сторінку та перевірте журнал перед повторним запуском.'); }
+  catch (_) { throw Object.assign(new Error('З’єднання перервалося. Оновіть сторінку та перевірте журнал перед повторним запуском.'),{uncertain:true}); }
   let result;
-  try { result = await response.json(); } catch (_) { throw new Error('Сервер не повернув результат. Перевірте журнал у розширеній панелі.'); }
+  try { result = await response.json(); } catch (_) { throw Object.assign(new Error('Сервер не повернув результат. Перевірте журнал у розширеній панелі.'),{uncertain:true}); }
   if (!result.success) throw new Error(result.data?.message || 'Операцію не виконано.');
   return result.data;
  }
@@ -30,10 +30,10 @@
  function done(row, text) { status(row,text);const c=row.querySelector('input[type=checkbox]');c.checked=false;c.dataset.done='1'; }
  async function task(fn) {
   if (busy) return;busy=true;stop=false;
-  const controls=[...document.querySelectorAll('.wrap button, .wrap input')];controls.forEach(c=>c.disabled=true);
+  const controls=[...document.querySelectorAll('.wrap button, .wrap input')];const disabled=new Map(controls.map(c=>[c,c.disabled]));controls.forEach(c=>c.disabled=true);
   el('ogo-simple-stop').hidden=false;el('ogo-simple-stop').disabled=false;
   try { await fn(); } catch(e) { progress(e.message); }
-  finally { busy=false;controls.forEach(c=>c.disabled=c.dataset.done==='1');el('ogo-simple-stop').hidden=true; }
+  finally { busy=false;controls.forEach(c=>c.disabled=disabled.get(c)||c.dataset.done==='1');el('ogo-simple-stop').hidden=true; }
  }
  el('ogo-simple-stop').onclick=()=>{stop=true;progress('Зупинка після поточного запиту…');};
  el('ogo-simple-pairs').onclick=()=>task(async()=>{
@@ -65,7 +65,7 @@
    catch(e){status(row,e.message);failed++;}
    progress(`Виконано пар: ${ok}; помилок: ${failed}.`);
   }
-  progress(`${stop?'Зупинено. ':''}Виконано пар: ${ok}; помилок: ${failed}. Оновіть сторінку для списку редиректів. Перевірте статті перед видаленням старих позначок.`);
+  progress(`${stop?'Зупинено. ':''}Виконано пар: ${ok}; помилок: ${failed}. Для масового видалення джерел перейдіть до розділу 3 → «Підготувати список видалення».`);
  });
  el('ogo-simple-slugs').onclick=()=>task(async()=>{
   const data=await api('slugs');const body=table('ogo-simple-slug-list',['Вибір','Позначка','Поточний slug','Новий slug','Результат']);
@@ -87,6 +87,45 @@
    progress(`Змінено slug: ${ok}; пропущено / помилок: ${failed}.`);
   }
   progress(`${stop?'Зупинено. ':''}Змінено slug: ${ok}; пропущено / помилок: ${failed}. Оновіть сторінку для списку редиректів. Відкат доступний у розширеній панелі → Перевірка slug.`);
+ });
+ let deleteLoaded=false;
+ async function scanDeletion() {
+  deleteLoaded=false;
+  const body=table('ogo-simple-delete-list',['Вибір','Джерело → ціль','Статей джерела','Контроль / результат']);
+  let after=0,checked=0,eligible=0;
+  do {
+   if(stop)break;
+   const data=await api('delete_scan',{after});
+   for(const item of data.items){
+    const row=node('tr');row.dataset.deleteId=item.id;row.dataset.token=item.token;
+    choice(row,item.id);const c=row.querySelector('input');c.checked=item.eligible;c.disabled=!item.eligible;
+    if(!item.eligible)c.dataset.done='1';else eligible++;
+    row.append(node('td',`${item.name} #${item.id} → ${item.target_name} #${item.target_id}`),node('td',String(item.count)),node('td',item.reason));body.append(row);
+   }
+   checked+=data.checked;after=data.next;
+   progress(`Перевірено перенесень: ${checked}. Готові до видалення: ${eligible}.`);
+  } while(after!==null);
+  deleteLoaded=!stop;
+  progress(`${stop?'Перевірку зупинено. ':''}Готові до видалення: ${eligible}. Усі придатні джерела вибрані. Перегляньте список і натисніть «Видалити всі перевірені джерела…».`);
+ }
+ el('ogo-simple-delete-scan').onclick=()=>task(scanDeletion);
+ el('ogo-simple-delete-run').onclick=()=>task(async()=>{
+  if(!deleteLoaded)await scanDeletion();
+  if(stop)return;
+  const rows=selected('ogo-simple-delete-list').filter(row=>row.dataset.token&&row.querySelector('input').dataset.done!=='1');
+  if(!rows.length){progress('Немає перевірених джерел для видалення. Перегляньте причини у списку.');return;}
+  if(!window.confirm(`Видалити ${rows.length} старих позначок із підготовленого списку?\n\nСтатті, цільові позначки та 301 залишаться. Старі позначки й їхні метадані буде видалено назавжди; відкат перенесення стане недоступним.`)){progress('Видалення скасовано. Жодну позначку не видалено.');return;}
+  rows.forEach(row=>row.querySelector('input').disabled=true);
+  let ok=0,failed=0;
+  for(const row of rows){
+   if(stop)break;
+   try{const r=await api('delete',{id:row.dataset.deleteId,token:row.dataset.token,confirmed:'1'});done(row,r.message);ok++;}
+   catch(e){status(row,e.message);failed++;if(e.uncertain)stop=true;}
+   progress(`Видалено джерел: ${ok}; пропущено / помилок: ${failed}.`);
+  }
+  // Newly created rows were not in task()'s initial control list.
+  el('ogo-simple-delete-list').querySelectorAll('input').forEach(c=>c.disabled=c.dataset.done==='1');
+  progress(`${stop?'Зупинено. ':''}Видалено джерел: ${ok}; пропущено / помилок: ${failed}. Статті та правила 301 збережені. Повторна підготовка списку покаже решту джерел.`);
  });
  window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
 })();

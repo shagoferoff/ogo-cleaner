@@ -11,9 +11,9 @@ trait OGO_Tag_Simple {
  }
  public static function simple_assets($hook){
   if($hook!=='tools_page_'.self::SLUG||isset($_GET['tab']))return;
-  wp_enqueue_script('ogo-tm-simple',plugins_url('assets/simple.js',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.8.1',true);
+  wp_enqueue_script('ogo-tm-simple',plugins_url('assets/simple.js',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.9.0',true);
   wp_localize_script('ogo-tm-simple','OGO_SIMPLE',['ajax'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_tm_workbench')]);
-  wp_enqueue_style('ogo-tm-simple',plugins_url('assets/simple.css',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.8.1');
+  wp_enqueue_style('ogo-tm-simple',plugins_url('assets/simple.css',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.9.0');
  }
  private static function simple_save($key,$value){
   if(!update_option($key,$value,false)&&get_option($key,null)!==$value)throw new RuntimeException('Не вдалося зберегти дані. Операцію зупинено.');
@@ -46,7 +46,9 @@ trait OGO_Tag_Simple {
  private static function simple_destination($rule){
   if($rule['kind']==='merge'){
    $op=self::staged()[$rule['source']]??null;
-   if(!$op||($op['state']??'')!=='staged'||(int)$op['target']!==(int)$rule['target']||strpos((string)($op['last_verify']['result']??''),'OK:')!==0)return false;
+   $deleted=self::simple_deletions()[$rule['source']]??null;
+   $proof=$deleted&&($deleted['state']??'')==='deleted'&&($deleted['rule']??null)===$rule;
+   if(!$op||($op['state']??'')!=='staged'||(int)$op['target']!==(int)$rule['target']||(!$proof&&strpos((string)($op['last_verify']['result']??''),'OK:')!==0))return false;
    $source=get_term((int)$rule['source'],'post_tag');
    if($source&&!is_wp_error($source)&&$source->slug!==$rule['old_slug'])return false;
   }else{
@@ -90,8 +92,10 @@ trait OGO_Tag_Simple {
   check_ajax_referer('ogo_tm_workbench','nonce');$lock=null;
   try{
    $op=sanitize_key(wp_unslash($_POST['op']??''));
-   if(in_array($op,['merge','slug'],true))$lock=self::workbench_lock(900);
+   if(in_array($op,['merge','slug','delete'],true))$lock=self::workbench_lock(900);
    switch($op){
+    case 'delete_scan':$result=self::simple_delete_scan();break;
+    case 'delete':$result=self::simple_delete_source();break;
     case 'pairs':$result=['items'=>self::simple_pairs()];break;
     case 'slugs':
      $items=[];foreach(self::rows() as $r){
@@ -140,7 +144,7 @@ trait OGO_Tag_Simple {
   }
   $_POST['id']=$a;$verified=self::workbench_verify();if(!$verified['ok'])throw new RuntimeException($verified['result']);
   $op=self::staged()[$a];self::simple_rule($op['source_url'],$b,'merge',$op['source_slug'],$a);
-  return ['message'=>'Статті додано до цільової позначки. 301 активний. Стару позначку можна видалити після перевірки.','verified'=>$verified];
+  return ['message'=>'Статті додано до цільової позначки. 301 активний. Джерело готове до масового видалення у розділі 3.','verified'=>$verified];
  }
  public static function simple_csv(){
   if(!current_user_can('manage_options'))wp_die('Недостатньо прав.');check_admin_referer('ogo_tm_simple_csv');
@@ -152,9 +156,10 @@ trait OGO_Tag_Simple {
   if(!current_user_can('manage_options'))wp_die('Недостатньо прав.');
   $advanced=admin_url('tools.php?page='.self::SLUG.'&tab=workflow');
   $csv=wp_nonce_url(admin_url('admin-post.php?action=ogo_tm_simple_csv'),'ogo_tm_simple_csv');
-  echo '<div class="wrap ogo-simple"><h1>OGO Tag Manager 3.8.1 — швидкі дії</h1><p><a class="button" href="'.esc_url($advanced).'">Розширена панель і відкат</a> <a class="button" href="'.esc_url($csv).'">Завантажити список редиректів (CSV)</a></p><p>301 працюють автоматично, поки OGO Tag Manager активний. Імпорт CSV не потрібний. Старі позначки видаляєте ви після перевірки статей. Власні SEO-налаштування джерела автоматично не переносяться.</p>';
+  echo '<div class="wrap ogo-simple"><h1>OGO Tag Manager 3.9.0 — швидкі дії</h1><p><a class="button" href="'.esc_url($advanced).'">Розширена панель і відкат</a> <a class="button" href="'.esc_url($csv).'">Завантажити список редиректів (CSV)</a></p><p>301 працюють автоматично, поки OGO Tag Manager активний. Імпорт CSV не потрібний. Старі джерела можна масово видалити нижче після перевірки перенесення. Власні SEO-налаштування джерела автоматично не переносяться.</p>';
   echo '<h2>1. Однина → множина</h2><p>Пари шукаються лише серед наявних позначок. Нові позначки не створюються. Перегляньте запропоновані пари та виберіть потрібні. Це мовні підказки: зміст кожної пари перевіряєте ви.</p><p><button type="button" class="button" id="ogo-simple-pairs">Знайти пари</button> Або за ID: <label>джерело <input type="number" min="1" id="ogo-simple-source" style="width:100px"></label> → <label>ціль <input type="number" min="1" id="ogo-simple-target" style="width:100px"></label> <button type="button" class="button" id="ogo-simple-pair-add">Додати пару</button></p><div id="ogo-simple-pair-list"></div><p><button type="button" class="button button-primary" id="ogo-simple-merge">Перевірити й об’єднати вибрані</button></p>';
   echo '<h2>2. Кириличні slug → латиниця</h2><p>Назви позначок і статті зберігаються. Нові slug можна виправити перед запуском. Зайняті адреси пропускаються з поясненням.</p><p><button type="button" class="button" id="ogo-simple-slugs">Знайти всі кириличні slug</button> <button type="button" class="button" id="ogo-simple-select">Вибрати всі / зняти вибір</button></p><div id="ogo-simple-slug-list"></div><p><button type="button" class="button button-primary" id="ogo-simple-slug-run">Змінити вибрані slug та ввімкнути 301</button></p><p><button type="button" class="button" id="ogo-simple-stop" hidden>Зупинити після поточного</button></p><div id="ogo-simple-progress" role="status" aria-live="polite"></div>';
+  self::simple_delete_page();
   echo '<h2>Список активних редиректів</h2><p><a class="button" href="'.esc_url($csv).'">Завантажити список редиректів (CSV)</a></p><p>Після виконання оновіть сторінку. CSV містить ті самі активні правила. Якщо змінити slug цілі, правила автоматично ведуть на її нову адресу.</p><table class="widefat striped"><thead><tr><th>Звідки</th><th>Куди (301)</th></tr></thead><tbody>';
   $count=0;foreach(self::simple_rules() as $rule){$url=self::simple_destination($rule);if(!$url)continue;$count++;echo '<tr><td>'.esc_html(rawurldecode($rule['path'])).'</td><td><a href="'.esc_url($url).'" target="_blank" rel="noopener">'.esc_html($url).'</a></td></tr>';}
   if(!$count)echo '<tr><td colspan="2">Ще немає активних редиректів.</td></tr>';

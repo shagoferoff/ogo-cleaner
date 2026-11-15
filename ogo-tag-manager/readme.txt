@@ -1,11 +1,20 @@
 === OGO Tag Manager ===
 Contributors: OGO
 Requires PHP: 7.4
-Stable tag: 3.8.1
+Stable tag: 3.9.0
 
 Tag auditing, reversible staged relationship migration, slug change batches and CSV redirect plans.
 
 == Changelog ==
+
+= 3.9.0 =
+* Added bulk deletion of completed merge sources to the main guided page.
+* Automatically selects eligible sources, including merges completed in earlier versions.
+* Rechecks article relationships, source/target changes, permissions, SEO and active redirects before each deletion.
+* Added signed per-source preview tokens, durable deletion intentions, retry recovery and progress/stop controls.
+* Keeps migration records and redirects after deleting source terms; article content and target terms are preserved.
+* Added PHP and browser coverage for deletion, cancellation, stale previews, partial errors and retained HTTP 301 rules.
+
 
 = 3.8.1 =
 * Added a second CSV download button beside the active redirects list.

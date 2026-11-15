@@ -1,17 +1,19 @@
 <?php
 /**
  * Plugin Name: OGO Tag Manager
- * Description: Guided tag merging, Cyrillic slug transliteration, automatic 301 redirects and reversible migration.
- * Version: 3.8.1
+ * Description: Guided tag merging, Cyrillic slug transliteration, automatic 301 redirects, reversible migration and bulk source cleanup.
+ * Version: 3.9.0
  * Author: OGO
  * Requires PHP: 7.4
  */
 if (!defined('ABSPATH')) exit;
 require_once __DIR__.'/includes/workbench.php';
 require_once __DIR__.'/includes/simple.php';
+require_once __DIR__.'/includes/delete.php';
 final class OGO_Tag_Manager {
  use OGO_Tag_Workbench;
  use OGO_Tag_Simple;
+ use OGO_Tag_Delete;
  const SNAP='ogo_tag_manager_preflight_v20'; const REV='ogo_tag_manager_queue_revision_v21'; const QSNAP='ogo_tag_manager_queue_snapshot_v21'; const JOURNAL='ogo_tag_manager_journal_v18'; const PAIRS='ogo_tag_manager_pair_decisions_v13'; const STAGED='ogo_tag_manager_staged_v1'; const SLUG='ogo-tag-manager'; const NONCE='ogo_tag_manager_export'; const QUEUE='ogo_tag_manager_review_v03';
  public static function init(){self::workbench_init();self::simple_init();add_action('admin_post_ogo_tag_manager_cleanup_confirm',[__CLASS__,'cleanup_confirm']);add_action('admin_post_ogo_tag_manager_cleanup_redirect_csv',[__CLASS__,'cleanup_redirect_csv']);add_action('admin_post_ogo_tag_manager_cleanup_execute',[__CLASS__,'cleanup_execute']);add_action('update_option_ogo_tag_manager_review_v03',[__CLASS__,'queue_changed'],10,2);add_action('admin_post_ogo_tag_manager_package_csv',[__CLASS__,'package_csv']);add_action('admin_post_ogo_tag_manager_package_confirm',[__CLASS__,'package_confirm']);add_action('admin_post_ogo_tag_manager_package_execute',[__CLASS__,'package_execute']);add_action('admin_post_ogo_tag_manager_stage_confirm',[__CLASS__,'stage_confirm']);add_action('admin_menu',[__CLASS__,'menu']);add_action('add_meta_boxes_post',[__CLASS__,'author_box']);add_action('wp_ajax_ogo_tag_suggest',[__CLASS__,'author_suggest']);add_action('admin_post_ogo_tag_manager_export',[__CLASS__,'export']);add_action('admin_post_ogo_tag_manager_plan_csv',[__CLASS__,'plan_csv']);add_action('admin_post_ogo_tag_manager_snapshot',[__CLASS__,'snapshot']);add_action('admin_post_ogo_tag_manager_control_csv',[__CLASS__,'control_csv']);add_action('admin_post_ogo_tag_manager_review',[__CLASS__,'review']);add_action('admin_post_ogo_tag_manager_stage',[__CLASS__,'stage']);add_action('admin_post_ogo_tag_manager_undo_stage',[__CLASS__,'undo_stage']);add_action('admin_post_ogo_tag_manager_redirect_csv',[__CLASS__,'redirect_csv']);add_action('admin_post_ogo_tag_manager_verify',[__CLASS__,'verify_stage']);add_action('admin_post_ogo_tag_manager_verify_batch',[__CLASS__,'verify_batch']);add_action('admin_post_ogo_tag_manager_pair',[__CLASS__,'pair_decision']);add_action('admin_post_ogo_tag_manager_batch_queue',[__CLASS__,'batch_queue']);add_action('admin_post_ogo_tag_manager_external_target',[__CLASS__,'external_target']);add_action('admin_post_ogo_tag_manager_suggested_group',[__CLASS__,'suggested_group']);add_action('wp_ajax_ogo_tag_find_targets',[__CLASS__,'find_targets']);}
  public static function menu(){add_management_page('OGO Tag Manager','OGO Tag Manager','manage_options',self::SLUG,[__CLASS__,'page']);}
