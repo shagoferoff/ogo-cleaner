@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Tag Manager
  * Description: Guided tag merging, Cyrillic slug transliteration, automatic 301 redirects, reversible migration and bulk source cleanup.
- * Version: 3.10.0
+ * Version: 3.11.0
  * Author: OGO
  * Requires PHP: 7.4
  */
@@ -11,11 +11,17 @@ require_once __DIR__.'/includes/workbench.php';
 require_once __DIR__.'/includes/simple.php';
 require_once __DIR__.'/includes/delete.php';
 require_once __DIR__.'/includes/exports.php';
+require_once __DIR__.'/includes/guided.php';
+require_once __DIR__.'/includes/chunks.php';
+require_once __DIR__.'/includes/pending.php';
 final class OGO_Tag_Manager {
  use OGO_Tag_Workbench;
  use OGO_Tag_Simple;
  use OGO_Tag_Delete;
  use OGO_Tag_Exports;
+ use OGO_Tag_Guided;
+ use OGO_Tag_Chunks;
+ use OGO_Tag_Pending;
  const SNAP='ogo_tag_manager_preflight_v20'; const REV='ogo_tag_manager_queue_revision_v21'; const QSNAP='ogo_tag_manager_queue_snapshot_v21'; const JOURNAL='ogo_tag_manager_journal_v18'; const PAIRS='ogo_tag_manager_pair_decisions_v13'; const STAGED='ogo_tag_manager_staged_v1'; const SLUG='ogo-tag-manager'; const NONCE='ogo_tag_manager_export'; const QUEUE='ogo_tag_manager_review_v03';
  public static function init(){self::workbench_init();self::simple_init();add_action('admin_post_ogo_tag_manager_cleanup_confirm',[__CLASS__,'cleanup_confirm']);add_action('admin_post_ogo_tag_manager_cleanup_redirect_csv',[__CLASS__,'cleanup_redirect_csv']);add_action('admin_post_ogo_tag_manager_cleanup_execute',[__CLASS__,'cleanup_execute']);add_action('update_option_ogo_tag_manager_review_v03',[__CLASS__,'queue_changed'],10,2);add_action('admin_post_ogo_tag_manager_package_csv',[__CLASS__,'package_csv']);add_action('admin_post_ogo_tag_manager_package_confirm',[__CLASS__,'package_confirm']);add_action('admin_post_ogo_tag_manager_package_execute',[__CLASS__,'package_execute']);add_action('admin_post_ogo_tag_manager_stage_confirm',[__CLASS__,'stage_confirm']);add_action('admin_menu',[__CLASS__,'menu']);add_action('add_meta_boxes_post',[__CLASS__,'author_box']);add_action('wp_ajax_ogo_tag_suggest',[__CLASS__,'author_suggest']);add_action('admin_post_ogo_tag_manager_export',[__CLASS__,'export']);add_action('admin_post_ogo_tag_manager_plan_csv',[__CLASS__,'plan_csv']);add_action('admin_post_ogo_tag_manager_snapshot',[__CLASS__,'snapshot']);add_action('admin_post_ogo_tag_manager_control_csv',[__CLASS__,'control_csv']);add_action('admin_post_ogo_tag_manager_review',[__CLASS__,'review']);add_action('admin_post_ogo_tag_manager_stage',[__CLASS__,'stage']);add_action('admin_post_ogo_tag_manager_undo_stage',[__CLASS__,'undo_stage']);add_action('admin_post_ogo_tag_manager_redirect_csv',[__CLASS__,'redirect_csv']);add_action('admin_post_ogo_tag_manager_verify',[__CLASS__,'verify_stage']);add_action('admin_post_ogo_tag_manager_verify_batch',[__CLASS__,'verify_batch']);add_action('admin_post_ogo_tag_manager_pair',[__CLASS__,'pair_decision']);add_action('admin_post_ogo_tag_manager_batch_queue',[__CLASS__,'batch_queue']);add_action('admin_post_ogo_tag_manager_external_target',[__CLASS__,'external_target']);add_action('admin_post_ogo_tag_manager_suggested_group',[__CLASS__,'suggested_group']);add_action('wp_ajax_ogo_tag_find_targets',[__CLASS__,'find_targets']);}
  public static function menu(){add_management_page('OGO Tag Manager','OGO Tag Manager','manage_options',self::SLUG,[__CLASS__,'page']);}
@@ -32,6 +38,8 @@ final class OGO_Tag_Manager {
  private static function link($r){return get_term_link((int)$r['term_id'],'post_tag');}
  private static function table($rows,$rules,$with_group=false){echo '<table class="widefat striped" style="margin-top:12px"><thead><tr>';foreach(array_merge($with_group?['Група']:[],['ID','Позначка','Частина посилання (slug)','Статей','URL','Robots (локальний файл)','Yoast: власні метадані']) as $h)echo '<th>'.esc_html($h).'</th>';echo '</tr></thead><tbody>';foreach($rows as $r){$url=self::link($r);$valid=!is_wp_error($url);echo '<tr>';if($with_group)echo '<td>'.esc_html($r['_group']).'</td>';echo '<td>'.(int)$r['term_id'].'</td><td>'.esc_html($r['name']).'</td><td><code>'.esc_html($r['slug']).'</code>'.(self::bad_slug($r['slug'])?' <strong style="color:#b32d2e">!</strong>':'').'</td><td>'.(int)$r['post_count'].'</td><td>'.($valid?'<a href="'.esc_url($url).'" target="_blank" rel="noopener">Відкрити</a>':'—').'</td><td>'.esc_html($valid?self::robots_status($url,$rules):'Невідомо').'</td>';[$t,$d,$n]=self::seo((int)$r['term_id']);echo '<td>'.esc_html(($t!==''?'Title ':'').($d!==''?'Description ':'').($n!==''?'Noindex='.$n:'')?:'Немає власних значень').'</td></tr>';}echo '</tbody></table>';}
  private static function suggestion($slug){
+  $slug=html_entity_decode((string)$slug,ENT_QUOTES|ENT_HTML5,'UTF-8');
+  $slug=str_replace(["'",'’','ʼ','`'],'',$slug);
   $latin=remove_accents($slug);$latin=sanitize_title($latin);
   if(!self::bad_slug($latin) && $latin!=='' && $latin!==$slug)return $latin;
   $map=['а'=>'a','б'=>'b','в'=>'v','г'=>'h','ґ'=>'g','д'=>'d','е'=>'e','є'=>'ye','ж'=>'zh','з'=>'z','и'=>'y','і'=>'i','ї'=>'yi','й'=>'j','к'=>'k','л'=>'l','м'=>'m','н'=>'n','о'=>'o','п'=>'p','р'=>'r','с'=>'s','т'=>'t','у'=>'u','ф'=>'f','х'=>'h','ц'=>'cz','ч'=>'ch','ш'=>'sh','щ'=>'shh','ь'=>'','ю'=>'yu','я'=>'ya','ы'=>'y','э'=>'e','ё'=>'yo','ъ'=>''];

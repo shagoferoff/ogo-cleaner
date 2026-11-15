@@ -1,9 +1,10 @@
 <?php
 define('OGO_TEST_BOOTSTRAP_ONLY',true);
 require __DIR__.'/tag-manager-3.8-test.php';
+if(getenv('OGO_REDIRECTION_FIXTURE'))require __DIR__.'/redirection-fixture.php';
 session_start();$request_post=$_POST;reset_fixture();$_POST=$request_post;
-foreach(['options','terms','links','uuid'] as $key)if(isset($_SESSION[$key]))$GLOBALS[$key]=$_SESSION[$key];
-register_shutdown_function(function(){foreach(['options','terms','links','uuid'] as $key)$_SESSION[$key]=$GLOBALS[$key];});
+foreach(['options','terms','links','uuid','mock_red_rows','mock_red_groups','mock_http','http_calls','mock_red_disabled'] as $key)if(isset($_SESSION[$key]))$GLOBALS[$key]=$_SESSION[$key];
+register_shutdown_function(function(){foreach(['options','terms','links','uuid','mock_red_rows','mock_red_groups','mock_http','http_calls','mock_red_disabled'] as $key)if(array_key_exists($key,$GLOBALS))$_SESSION[$key]=$GLOBALS[$key];else unset($_SESSION[$key]);});
 function is_admin(){return false;}
 function nocache_headers(){header('Cache-Control: no-cache, no-store, must-revalidate');}
 function wp_safe_redirect($url,$status=302,$by=''){header('Location: '.$url,true,$status);header('X-Redirect-By: '.$by);return true;}
@@ -19,7 +20,13 @@ function wp_create_nonce($action){return 'nonce';}
 function wp_nonce_field($action){echo '<input type="hidden" name="_wpnonce" value="nonce">';}
 function wp_die($message){http_response_code(400);echo $message;exit;}
 $path=parse_url($_SERVER['REQUEST_URI'],PHP_URL_PATH);
-if($path==='/reset'){reset_fixture();echo 'reset';return;}
+if($path==='/reset'){if(getenv('OGO_REDIRECTION_FIXTURE'))fresh_pending();else reset_fixture();echo 'reset';return;}
+if($path==='/seed-large'){$GLOBALS['links'][3]=range(1000,1577);echo 'seeded';return;}
+if($path==='/seed-collision'){$GLOBALS['terms'][5]->name='Безпілотник';$GLOBALS['terms'][5]->slug='bezpilotnyk';echo 'seeded';return;}
+if($path==='/seed-double-collision'){$GLOBALS['terms'][5]->name='Безпілотник';$GLOBALS['terms'][5]->slug='bezpilotnyk';foreach([6,7] as $id){$GLOBALS['terms'][$id]=(object)['term_id'=>$id,'term_taxonomy_id'=>$id,'name'=>'Дублікат '.$id,'slug'=>'дублікат-'.$id];$GLOBALS['links'][$id]=[$id,$id+1];}echo 'seeded';return;}
+if($path==='/import-test-pending'&&getenv('OGO_REDIRECTION_FIXTURE')){$index=99;foreach(call_private('simple_rules') as $key=>$rule)if(call_private('simple_destination',$rule))enable_rule($key,$index++);echo 'simulated import';return;}
+if($path==='/disable-test-redirection'&&getenv('OGO_REDIRECTION_FIXTURE')){foreach($GLOBALS['mock_red_rows'] as &$row)$row['enabled']=false;unset($row);echo 'disabled fixture';return;}
+if($path==='/test-probe'&&getenv('OGO_REDIRECTION_FIXTURE')){header('Content-Type: application/json');$rules=call_private('simple_rules');$rule=reset($rules);echo json_encode(['token'=>call_private('pending_probe',$rule['path']),'source'=>$rule['path']]);return;}
 if($path==='/seed-export-test'){
  for($i=100;$i<105;$i++){$GLOBALS['terms'][$i]=(object)['term_id'=>$i,'term_taxonomy_id'=>$i,'name'=>'Позначка '.$i,'slug'=>'позначка-'.$i];$GLOBALS['links'][$i]=[$i];}
  echo 'seeded';return;
@@ -42,4 +49,5 @@ if($path==='/page'){
 }
 // Use local server URLs only for these test responses.
 OGO_Tag_Manager::simple_redirect();
+if(getenv('OGO_REDIRECTION_FIXTURE')&&!red_is_disabled())foreach(Red_Item::get_for_url($path) as $item){$r=$item->to_json();$group=Red_Group::get($r['group_id']);if(!empty($r['enabled'])&&$group&&$group->is_enabled()&&call_private('simple_path',$r['url'])===call_private('simple_path',$path)){wp_safe_redirect(call_private('pending_absolute',$r['action_data']['url']),301,'Redirection');return;}}
 header('Content-Type: text/plain');echo 'No redirect';

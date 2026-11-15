@@ -1,7 +1,9 @@
-# OGO Tag Manager 3.10.0
+# OGO Tag Manager 3.11.0
 
-Виправлено експорт CSV: раніше кнопка вивантажувала весь реєстр. Тепер кожен запуск об’єднання або зміни slug має власний збережений набір джерел і CSV. Новий запуск не включає старі активні правила. Є експорт вибраних рядків для змін попередніх версій і явно підписана повна резервна копія. Завантаження не позначає правила як імпортовані у Redirection.
+Persistent per-pair Skip/Restore, occupied-slug merge plans, resumable 100-link chunks, pending-only redirect CSV and verified Redirection handoff are implemented. Existing option keys and fallback rules are preserved.
 
-Перевірено сценарій: старі правила + 5 нових змін → CSV рівно на 5 рядків; наступний запуск має окремий файл; вибрані 2 рядки → CSV на 2 рядки. Пакети зберігаються після оновлення сторінки та видалення джерел.
+Verification requires an enabled exact URL rule in the configured Redirection group, a direct HTTP 301 with a Redirection provider header, and HTTP 200 at the destination. Signed probes bypass the OGO fallback. Successful rows are excluded from pending and ordinary exports. Disabled or changed external rules reappear and OGO fallback returns. The plugin does not import or mutate external Redirection rules.
 
-Пройшли 140 локальних перевірок PHP, браузера та HTTP, включно з попередніми об’єднаннями, slug і масовим видаленням. Використано замінники API WordPress зі справжнім кодом плагіна; справжній WordPress/MySQL і Redirection сайту локально не запускалися. Деталі — README-UA.txt.
+190 local checks passed: 36 baseline, 31 deletion, 30 export, 32 guided/chunks, 33 Redirection verification and 28 browser/HTTP checks. WordPress and Redirection APIs were simulated; actual site WordPress/MySQL, installed Redirection version and caching need deployment verification. Full Ukrainian release instructions and limits: README-UA.txt.
+
+API references: https://redirection.me/developer/php-api/ and https://github.com/johngodley/redirection/tree/trunk/models .

@@ -1,11 +1,22 @@
 === OGO Tag Manager ===
 Contributors: OGO
 Requires PHP: 7.4
-Stable tag: 3.10.0
+Stable tag: 3.11.0
 
 Tag auditing, reversible staged relationship migration, slug change batches and CSV redirect plans.
 
 == Changelog ==
+
+= 3.11.0 =
+* Added persistent per-pair Skip and Restore actions without creating or deleting tags.
+* Occupied Cyrillic slug suggestions now prepare confirmed merges into the existing tag, including multiple sources sharing one target.
+* Large merges run in chunks of at most 100 link writes with durable intent, progress, stop and resume after reload or interrupted verification.
+* Replaced the full active-rule table with Pending Redirects and a dedicated pending-only CSV.
+* Added selected Redirection group verification: active exact rule, direct HTTP 301, Redirection response marker and target HTTP 200.
+* Signed probe headers bypass OGO fallback during verification; successful external rules are hidden from pending and future ordinary exports.
+* Preserved internal fallback and migration history; a disabled or changed external rule returns to pending.
+* Normalized apostrophes and HTML entities in transliteration suggestions.
+
 
 = 3.10.0 =
 * Added durable CSV batches per guided merge or slug-change action.

@@ -13,7 +13,7 @@ trait OGO_Tag_Exports {
  }
  private static function export_start(){
   $kind=sanitize_key(wp_unslash($_POST['kind']??''));
-  if(!in_array($kind,['merge','slug'],true))throw new RuntimeException('Некоректний тип пакета CSV.');
+  if(!in_array($kind,['merge','slug','mixed'],true))throw new RuntimeException('Некоректний тип пакета CSV.');
   $id=wp_generate_uuid4();$batches=self::export_batches();
   $batches[$id]=['user'=>get_current_user_id(),'kind'=>$kind,'at'=>current_time('mysql'),'rules'=>[]];
   self::simple_save('ogo_tm_export_batches_v310',$batches);
@@ -22,19 +22,21 @@ trait OGO_Tag_Exports {
  private static function export_validate_request($kind){
   $id=sanitize_text_field(wp_unslash($_POST['export_batch']??''));if(!$id)return;
   $batch=self::export_batch($id);
-  if($batch['kind']!==$kind)throw new RuntimeException('Пакет CSV має інший тип операції.');
+  if($batch['kind']!==$kind&&$batch['kind']!=='mixed')throw new RuntimeException('Пакет CSV має інший тип операції.');
  }
  private static function export_capture($key,$rule,$previous){
   $id=sanitize_text_field(wp_unslash($_POST['export_batch']??''));if(!$id)return;
   $batch=self::export_batch($id);
-  if($batch['kind']!==$rule['kind'])throw new RuntimeException('Пакет CSV не відповідає правилу.');
+  if($batch['kind']!==$rule['kind']&&$batch['kind']!=='mixed')throw new RuntimeException('Пакет CSV не відповідає правилу.');
   if(isset($batch['rules'][$key])){
    if($batch['rules'][$key]!==$rule)throw new RuntimeException('Адреса вже має інше правило в цьому пакеті.');
    return;
   }
   // Retrying a completed migration does not make its existing rule new again.
   if($previous===$rule&&self::simple_destination($previous))return;
-  $batches=self::export_batches();$batches[$id]['rules'][$key]=$rule;
+  $batches=self::export_batches();
+  foreach($batches as $other=>$old)if($other!==$id&&isset($old['rules'][$key])&&$old['rules'][$key]===$rule)unset($batches[$other]['rules'][$key]);
+  $batches[$id]['rules'][$key]=$rule;
   // Persist membership before the rule/term write, so an interrupted request is recoverable.
   self::simple_save('ogo_tm_export_batches_v310',$batches);
  }
@@ -42,7 +44,7 @@ trait OGO_Tag_Exports {
   $batch=self::export_batch($id);$rules=self::simple_rules();$rows=[];$excluded=0;
   foreach($batch['rules'] as $key=>$snapshot){
    if(!isset($rules[$key])||$rules[$key]!==$snapshot){$excluded++;continue;}
-   $url=self::simple_destination($rules[$key]);if(!$url){$excluded++;continue;}
+   $url=self::simple_destination($rules[$key]);if(!$url||self::pending_done($key,$rules[$key],$url)){$excluded++;continue;}
    $rows[]=[$snapshot['path'],wp_parse_url($url,PHP_URL_PATH),'0','301'];
   }
   return ['rows'=>$rows,'excluded'=>$excluded];
@@ -60,6 +62,7 @@ trait OGO_Tag_Exports {
   return '';
  }
  private static function export_csv_rows($scope,$id='',$keys=[]){
+  if($scope==='pending'){$rows=[];foreach(self::pending_rules() as $item)$rows[]=[$item['source'],wp_parse_url($item['target'],PHP_URL_PATH),'0','301'];return $rows;}
   if($scope==='latest'){$id=self::export_latest();if(!$id)throw new RuntimeException('Ще немає пакетів CSV. Для попередніх змін виберіть потрібні рядки у списку редиректів.');$scope='batch';}
   if($scope==='batch')return self::export_batch_rows($id)['rows'];
   if(!in_array($scope,['all','selected'],true))throw new RuntimeException('Невідомий режим експорту CSV.');
@@ -71,7 +74,8 @@ trait OGO_Tag_Exports {
     $selected[$key]=$rules[$key];
    }$rules=$selected;
   }
-  $rows=[];foreach($rules as $rule){$url=self::simple_destination($rule);
+  $rows=[];foreach($rules as $key=>$rule){$url=self::simple_destination($rule);
+   if($scope==='selected'&&$url&&self::pending_done($key,$rule,$url))continue;
    if(!$url){if($scope==='selected')throw new RuntimeException('Вибране правило вже не активне. Оновіть список.');continue;}
    $rows[]=[$rule['path'],wp_parse_url($url,PHP_URL_PATH),'0','301'];
   }return $rows;
@@ -97,7 +101,7 @@ trait OGO_Tag_Exports {
   $shown=0;foreach(array_reverse(self::export_batches(),true) as $id=>$batch){
    if((int)$batch['user']!==(int)get_current_user_id())continue;
    if($shown++>=20)break;$info=self::export_info($id);
-   echo '<p>'.esc_html($batch['at'].' · '.($batch['kind']==='merge'?'Об’єднання':'Зміна slug').' · редиректів: '.$info['count']);
+   echo '<p>'.esc_html($batch['at'].' · '.($batch['kind']==='merge'?'Об’єднання':($batch['kind']==='mixed'?'Slug і дублікати':'Зміна slug')).' · редиректів: '.$info['count']);
    if($info['excluded'])echo ' · неактивних / змінених: '.$info['excluded'];
    if($info['count'])echo ' <a class="button" href="'.esc_url($info['csv']).'">CSV цього пакета ('.$info['count'].')</a>';
    echo '</p>';
