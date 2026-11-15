@@ -11,9 +11,9 @@ trait OGO_Tag_Simple {
  }
  public static function simple_assets($hook){
   if($hook!=='tools_page_'.self::SLUG||isset($_GET['tab']))return;
-  wp_enqueue_script('ogo-tm-simple',plugins_url('assets/simple.js',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.11.0',true);
+  wp_enqueue_script('ogo-tm-simple',plugins_url('assets/simple.js',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.11.1',true);
   wp_localize_script('ogo-tm-simple','OGO_SIMPLE',['ajax'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_tm_workbench')]);
-  wp_enqueue_style('ogo-tm-simple',plugins_url('assets/simple.css',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.11.0');
+  wp_enqueue_style('ogo-tm-simple',plugins_url('assets/simple.css',dirname(__DIR__).'/ogo-tag-manager.php'),[],'3.11.1');
  }
  private static function simple_save($key,$value){
   if(!update_option($key,$value,false)&&get_option($key,null)!==$value)throw new RuntimeException('Не вдалося зберегти дані. Операцію зупинено.');
@@ -59,11 +59,23 @@ trait OGO_Tag_Simple {
   $term=self::simple_target((int)$rule['target']);if(!$term)return false;
   $url=get_term_link($term);
   if(is_wp_error($url)||wp_parse_url($url,PHP_URL_HOST)!==wp_parse_url(home_url(),PHP_URL_HOST)||self::simple_path($url)===$rule['path'])return false;
-  // Do not steal a URL subsequently assigned to another live tag.
-  $slug=rawurldecode(basename(rtrim($rule['path'],'/')));$owner=get_term_by('slug',$slug,'post_tag');
+  // Slug lookups run sanitize_title(), which transliteration plugins can rewrite.
+  // Check actual stored slugs so a Cyrillic source is not mistaken for its Latin target.
   $allowed=$rule['kind']==='merge'?(int)$rule['source']:(int)$rule['target'];
-  if($owner&&(int)$owner->term_id!==$allowed)return false;
+  if(!self::simple_source_available($rule['path'],$allowed))return false;
   return $url;
+ }
+ private static function simple_source_available($path,$allowed){
+  global $wpdb;
+  $segment=basename(rtrim($path,'/'));$slug=rawurldecode($segment);$encoded=rawurlencode($slug);
+  $owners=$wpdb->get_results($wpdb->prepare("SELECT t.term_id,t.slug FROM {$wpdb->terms} t INNER JOIN {$wpdb->term_taxonomy} tt ON tt.term_id=t.term_id WHERE tt.taxonomy=%s AND t.slug IN (%s,%s,%s)",'post_tag',$slug,$encoded,strtolower($encoded)),ARRAY_A);
+  if(!is_array($owners)||!empty($wpdb->last_error))return false;
+  $needle=self::simple_path('/'.$segment.'/');
+  foreach($owners as $owner){
+   if(!isset($owner['term_id'],$owner['slug']))return false;
+   if(self::simple_path('/'.$owner['slug'].'/')===$needle&&(int)$owner['term_id']!==$allowed)return false;
+  }
+  return true;
  }
  public static function simple_redirect(){
   if(is_admin()||!in_array($_SERVER['REQUEST_METHOD']??'GET',['GET','HEAD'],true))return;
@@ -166,7 +178,7 @@ trait OGO_Tag_Simple {
   if(!current_user_can('manage_options'))wp_die('Недостатньо прав.');
   $advanced=admin_url('tools.php?page='.self::SLUG.'&tab=workflow');
   $csv=self::export_link('all');
-  echo '<div class="wrap ogo-simple"><h1>OGO Tag Manager 3.11.0 — швидкі дії</h1><p><a class="button" href="'.esc_url($advanced).'">Розширена панель і відкат</a> <a class="button" href="#ogo-pending-heading">Неперевірені редиректи ↓</a></p><p>Нові 301 тимчасово працюють через OGO Tag Manager. Експортуйте неперевірені правила у свою групу Redirection і перевірте їх кнопкою нижче. Старі джерела можна масово видалити нижче після перевірки перенесення. Власні SEO-налаштування джерела автоматично не переносяться.</p>';
+  echo '<div class="wrap ogo-simple"><h1>OGO Tag Manager 3.11.1 — швидкі дії</h1><p><a class="button" href="'.esc_url($advanced).'">Розширена панель і відкат</a> <a class="button" href="#ogo-pending-heading">Неперевірені редиректи ↓</a></p><p>Нові 301 тимчасово працюють через OGO Tag Manager. Експортуйте неперевірені правила у свою групу Redirection і перевірте їх кнопкою нижче. Старі джерела можна масово видалити нижче після перевірки перенесення. Власні SEO-налаштування джерела автоматично не переносяться.</p>';
   echo '<h2>1. Однина → множина</h2><p>Пари шукаються лише серед наявних позначок. Нові позначки не створюються. Перегляньте пари й виберіть потрібні. Якщо це різні поняття (наприклад, Шахтар — клуб і шахтарі — професія), натисніть «Пропустити пару». Великі перенесення обробляються порціями з можливістю продовження.</p><p><button type="button" class="button" id="ogo-simple-pairs">Знайти пари</button> Або за ID: <label>джерело <input type="number" min="1" id="ogo-simple-source" style="width:100px"></label> → <label>ціль <input type="number" min="1" id="ogo-simple-target" style="width:100px"></label> <button type="button" class="button" id="ogo-simple-pair-add">Додати пару</button></p><div id="ogo-simple-pair-list"></div><details><summary>Пропущені пари</summary><p><button type="button" class="button" id="ogo-skipped-load">Показати пропущені пари</button></p><div id="ogo-skipped-list"></div></details><p><button type="button" class="button button-primary" id="ogo-simple-merge">Перевірити й об’єднати вибрані</button></p>';
   echo '<h2>2. Кириличні slug → латиниця</h2><p>Назви позначок і статті зберігаються. Нові slug можна виправити перед запуском. Якщо адреса зайнята іншою позначкою, буде запропоновано об’єднання з перенесенням статей і редиректом. Перед виконанням показується план.</p><p><button type="button" class="button" id="ogo-simple-slugs">Знайти всі кириличні slug</button> <button type="button" class="button" id="ogo-simple-select">Вибрати всі / зняти вибір</button></p><div id="ogo-simple-slug-list"></div><p><button type="button" class="button button-primary" id="ogo-simple-slug-run">Застосувати slug та об’єднати дублікати</button></p><p><button type="button" class="button" id="ogo-simple-stop" hidden>Зупинити після поточного</button></p><div id="ogo-simple-progress" role="status" aria-live="polite"></div>';
   self::simple_delete_page();

@@ -1,11 +1,18 @@
 === OGO Tag Manager ===
 Contributors: OGO
 Requires PHP: 7.4
-Stable tag: 3.11.0
+Stable tag: 3.11.1
 
 Tag auditing, reversible staged relationship migration, slug change batches and CSV redirect plans.
 
 == Changelog ==
+
+= 3.11.1 =
+* Fixed false source-ownership conflicts when WordPress slug lookup filters transliterate a Cyrillic source into the Latin destination.
+* Source ownership is now checked against actual stored post_tag slugs through a prepared read-only query, preserving protection against genuinely reused paths.
+* Existing completed merges recover their internal redirect, pending export and deletion eligibility without rerunning article migration.
+* Added regression cases matching the three reported source tags, including encoded slugs and real path reuse.
+
 
 = 3.11.0 =
 * Added persistent per-pair Skip and Restore actions without creating or deleting tags.

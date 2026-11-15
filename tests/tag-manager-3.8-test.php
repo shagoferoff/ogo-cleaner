@@ -13,7 +13,7 @@ function get_term($id,$tax){return isset($GLOBALS['terms'][$id])?clone $GLOBALS[
 function get_term_meta($id){return $GLOBALS['term_meta'][$id]??[];}
 function wp_hash($payload){return hash_hmac('sha256',$payload,'isolated-fixture-secret');}
 function wp_delete_term($id,$taxonomy){if($GLOBALS['fail_delete']??false)return new WP_Error;if(!isset($GLOBALS['terms'][$id]))return false;unset($GLOBALS['terms'][$id],$GLOBALS['links'][$id]);if($GLOBALS['fail_after_delete']??false)$GLOBALS['fail_save']='ogo_tm_deletions_v39';return true;}
-function get_term_by($by,$value,$tax){foreach($GLOBALS['terms'] as $t)if($t->$by===$value||rawurldecode($t->$by)===$value)return clone $t;return false;}
+function get_term_by($by,$value,$tax){if($by==='slug'&&isset($GLOBALS['lookup_transliteration'][$value]))$value=$GLOBALS['lookup_transliteration'][$value];foreach($GLOBALS['terms'] as $t)if($t->$by===$value||rawurldecode($t->$by)===$value)return clone $t;return false;}
 function get_term_link($t,$tax=null){if(is_int($t))$t=get_term($t,'post_tag');return $t?'https://ogo.test/tag/'.$t->slug.'/':new WP_Error;}
 function wp_update_term($id,$tax,$args){if($GLOBALS['fail_update']??false)return new WP_Error;$GLOBALS['terms'][$id]->slug=$args['slug'];return ['term_id'=>$id];}
 function wp_add_object_terms($object,$term,$tax){$GLOBALS['link_add_calls']=($GLOBALS['link_add_calls']??0)+1;if(($GLOBALS['after_add_save_fail_at']??0)===$object)$GLOBALS['fail_save']=OGO_Tag_Manager::STAGED;if(($GLOBALS['fail_add']??0)===$object)return new WP_Error;$GLOBALS['links'][$term]=array_values(array_unique(array_merge($GLOBALS['links'][$term],[$object])));return [$term];}
@@ -40,6 +40,7 @@ function wp_generate_uuid4(){return 'test-'.++$GLOBALS['uuid'];}
 function wp_send_json_error($d,$status=400){throw new JsonResult($d,false);}
 function wp_send_json_success($d){throw new JsonResult($d,true);}
 class FakeDB {
+ public $last_error='';
  public $terms='terms',$term_taxonomy='taxonomy',$term_relationships='relationships',$options='options';
  function prepare($q,...$args){foreach($args as $arg)$q=preg_replace('/%[ds]/',(string)$arg,$q,1);return $q;}
  function get_col($q){preg_match('/term_taxonomy_id=(\d+)/',$q,$m);return $GLOBALS['links'][(int)$m[1]]??[];}
@@ -49,7 +50,7 @@ class FakeDB {
   if(count($ids)===2)return count(array_intersect($GLOBALS['links'][$ids[0]],$GLOBALS['links'][$ids[1]]));
   return count($GLOBALS['links'][$ids[0]]??[]);
  }
- function get_results($q,$format){$out=[];foreach($GLOBALS['terms'] as $t)$out[]=['term_id'=>$t->term_id,'name'=>$t->name,'slug'=>$t->slug,'post_count'=>count($GLOBALS['links'][$t->term_id])];return $out;}
+ function get_results($q,$format){if(strpos($q,'SELECT t.term_id,t.slug ')===0){$out=[];foreach($GLOBALS['terms'] as $t)$out[]=['term_id'=>$t->term_id,'slug'=>$t->slug];return $out;}$out=[];foreach($GLOBALS['terms'] as $t)$out[]=['term_id'=>$t->term_id,'name'=>$t->name,'slug'=>$t->slug,'post_count'=>count($GLOBALS['links'][$t->term_id])];return $out;}
 }
 $wpdb=new FakeDB;
 define('OGO_TEST_PLUGIN_ROOT',getenv('OGO_TEST_PLUGIN_ROOT')?: (is_dir(__DIR__.'/../ogo-tag-manager-3.8.0/ogo-tag-manager')?__DIR__.'/../ogo-tag-manager-3.8.0/ogo-tag-manager':__DIR__.'/../ogo-tag-manager'));
@@ -58,7 +59,7 @@ function call_private($method,...$args){$r=new ReflectionMethod('OGO_Tag_Manager
 function reset_fixture(){
  $GLOBALS['options']=[];$GLOBALS['terms']=[];$GLOBALS['uuid']=0;$GLOBALS['links']=[5681=>[11,12],7058=>[12,13],3=>[14],4=>[],5=>[]];
  foreach([[5681,'адвокат','advokat'],[7058,'адвокати','%d0%b0%d0%b4%d0%b2%d0%be%d0%ba%d0%b0%d1%82%d0%b8'],[3,'безпілотник','безпілотник'],[4,'безпілотники','bezpilotnyky'],[5,'Інше','occupied']] as [$id,$name,$slug])$GLOBALS['terms'][$id]=(object)['term_id'=>$id,'term_taxonomy_id'=>$id,'name'=>$name,'slug'=>$slug];
- unset($GLOBALS['fail_verify_save'],$GLOBALS['link_add_calls'],$GLOBALS['after_add_save_fail_at'],$GLOBALS['denied_cap'],$GLOBALS['term_meta'],$GLOBALS['fail_delete'],$GLOBALS['fail_after_delete'],$GLOBALS['fail_save'],$GLOBALS['fail_add'],$GLOBALS['fail_rollback'],$GLOBALS['fail_update'],$GLOBALS['authorized']);$_POST=[];
+ unset($GLOBALS['lookup_transliteration'],$GLOBALS['fail_verify_save'],$GLOBALS['link_add_calls'],$GLOBALS['after_add_save_fail_at'],$GLOBALS['denied_cap'],$GLOBALS['term_meta'],$GLOBALS['fail_delete'],$GLOBALS['fail_after_delete'],$GLOBALS['fail_save'],$GLOBALS['fail_add'],$GLOBALS['fail_rollback'],$GLOBALS['fail_update'],$GLOBALS['authorized']);$_POST=[];
 }
 function api($op,$data=[]){$_POST=['op'=>$op,'nonce'=>'nonce']+$data;try{OGO_Tag_Manager::simple_api();}catch(JsonResult $r){return $r;}throw new Exception('missing JSON result');}
 function merge_pair($source=5681,$target=7058){$p=api('preview',compact('source','target'));if(!$p->ok)throw new Exception(json_encode($p->data));return api('merge',['source'=>$source,'target'=>$target,'hash'=>$p->data['hash']]);}

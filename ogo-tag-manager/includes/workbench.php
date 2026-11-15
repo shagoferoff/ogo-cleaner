@@ -21,9 +21,9 @@ trait OGO_Tag_Workbench {
  }
  public static function workbench_assets($hook){
   if($hook!=='tools_page_'.self::SLUG)return;
-  wp_enqueue_script('ogo-tm-workbench',plugins_url('assets/workbench.js',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.11.0',true);
+  wp_enqueue_script('ogo-tm-workbench',plugins_url('assets/workbench.js',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.11.1',true);
   wp_localize_script('ogo-tm-workbench','OGO_TM',['ajax'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_tm_workbench'),'findNonce'=>wp_create_nonce('ogo_tag_find_targets')]);
-  wp_enqueue_style('ogo-tm-workbench',plugins_url('assets/workbench.css',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.11.0');
+  wp_enqueue_style('ogo-tm-workbench',plugins_url('assets/workbench.css',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.11.1');
  }
  private static function return_filter(){
   $v=sanitize_key(wp_unslash($_POST['return_filter']??$_GET['filter']??'all'));

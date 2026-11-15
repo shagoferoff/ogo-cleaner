@@ -1,6 +1,6 @@
 <?php
 define('OGO_TEST_BOOTSTRAP_ONLY',true);
-putenv('OGO_TEST_PLUGIN_ROOT='.(is_dir(__DIR__.'/../ogo-tag-manager-3.11.0/ogo-tag-manager')?__DIR__.'/../ogo-tag-manager-3.11.0/ogo-tag-manager':__DIR__.'/../ogo-tag-manager'));
+putenv('OGO_TEST_PLUGIN_ROOT='.(getenv('OGO_TEST_PLUGIN_ROOT')?: (is_dir(__DIR__.'/../ogo-tag-manager-3.11.0/ogo-tag-manager')?__DIR__.'/../ogo-tag-manager-3.11.0/ogo-tag-manager':__DIR__.'/../ogo-tag-manager')));
 require __DIR__.'/tag-manager-3.8-test.php';$passed=0;
 require __DIR__.'/redirection-fixture.php';
 $key=setup_one();check(count(api('pending_list')->data['items'])===1&&count(call_private('export_csv_rows','pending'))===1,'old rules automatically appear as pending after upgrade');

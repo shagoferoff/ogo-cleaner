@@ -1,9 +1,9 @@
-# OGO Tag Manager 3.11.0
+# OGO Tag Manager 3.11.1
 
-Persistent per-pair Skip/Restore, occupied-slug merge plans, resumable 100-link chunks, pending-only redirect CSV and verified Redirection handoff are implemented. Existing option keys and fallback rules are preserved.
+Fixed false redirect ownership conflicts caused by filtered slug lookup: WordPress WP_Term_Query applies sanitize_title to slug lookup values, and transliteration filters can turn a Cyrillic source into its Latin target. Ownership now uses a prepared read-only query against actual post_tag slugs and compares normalized raw paths. Genuine reuse by another tag still blocks the redirect, and database errors fail closed.
 
-Verification requires an enabled exact URL rule in the configured Redirection group, a direct HTTP 301 with a Redirection provider header, and HTTP 200 at the destination. Signed probes bypass the OGO fallback. Successful rows are excluded from pending and ordinary exports. Disabled or changed external rules reappear and OGO fallback returns. The plugin does not import or mutate external Redirection rules.
+The reported mappings 8422 → 6385, 13161 → 8811, and 30768 → 24238 were reproduced in isolated regression fixtures with transliterated lookups. Their completed transfers recover active redirects, pending CSV rows and cleanup eligibility without moving articles again.
 
-190 local checks passed: 36 baseline, 31 deletion, 30 export, 32 guided/chunks, 33 Redirection verification and 28 browser/HTTP checks. WordPress and Redirection APIs were simulated; actual site WordPress/MySQL, installed Redirection version and caching need deployment verification. Full Ukrainian release instructions and limits: README-UA.txt.
+All prior 190 local checks and 15 new ownership regressions passed (205 total). Actual WordPress/MySQL, third-party plugin filters and production cache require deployment verification. No live-site data was changed by this release task.
 
-API references: https://redirection.me/developer/php-api/ and https://github.com/johngodley/redirection/tree/trunk/models .
+Reference: https://github.com/WordPress/wordpress-develop/blob/trunk/src/wp-includes/class-wp-term-query.php .
