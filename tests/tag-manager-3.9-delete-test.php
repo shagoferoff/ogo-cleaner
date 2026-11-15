@@ -1,6 +1,6 @@
 <?php
 define('OGO_TEST_BOOTSTRAP_ONLY',true);
-putenv('OGO_TEST_PLUGIN_ROOT='.(is_dir(__DIR__.'/../ogo-tag-manager-3.9.0/ogo-tag-manager')?__DIR__.'/../ogo-tag-manager-3.9.0/ogo-tag-manager':__DIR__.'/../ogo-tag-manager'));
+putenv('OGO_TEST_PLUGIN_ROOT='.(getenv('OGO_TEST_PLUGIN_ROOT')?: (is_dir(__DIR__.'/../ogo-tag-manager-3.9.0/ogo-tag-manager')?__DIR__.'/../ogo-tag-manager-3.9.0/ogo-tag-manager':__DIR__.'/../ogo-tag-manager')));
 require __DIR__.'/tag-manager-3.8-test.php';
 $passed=0;
 function plan($id=5681){$r=api('delete_scan');if(!$r->ok)throw new Exception(json_encode($r->data));foreach($r->data['items'] as $row)if($row['id']===$id)return $row;return null;}

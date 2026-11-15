@@ -1,11 +1,19 @@
 === OGO Tag Manager ===
 Contributors: OGO
 Requires PHP: 7.4
-Stable tag: 3.9.0
+Stable tag: 3.10.0
 
 Tag auditing, reversible staged relationship migration, slug change batches and CSV redirect plans.
 
 == Changelog ==
+
+= 3.10.0 =
+* Added durable CSV batches per guided merge or slug-change action.
+* The current batch exports only new active source rules, excluding older redirects, failed writes and undone changes.
+* Added batch row counts, history and reload recovery; source cleanup retains batch exports.
+* Added explicit selected-row export for legacy changes and a separately labelled full backup CSV.
+* Exporting does not mark rules as imported; each batch has a stable file identity.
+
 
 = 3.9.0 =
 * Added bulk deletion of completed merge sources to the main guided page.

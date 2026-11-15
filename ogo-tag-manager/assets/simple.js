@@ -28,6 +28,17 @@
  function selected(container) { return [...el(container).querySelectorAll('tbody tr')].filter(r=>r.querySelector('input[type=checkbox]:checked')); }
  function status(row, text) { row.lastElementChild.textContent=text; }
  function done(row, text) { status(row,text);const c=row.querySelector('input[type=checkbox]');c.checked=false;c.dataset.done='1'; }
+ function exportLink(info){
+  if(!info)return;
+  document.querySelectorAll('[data-ogo-export-latest]').forEach(a=>{a.href=info.csv;a.hidden=!info.count;a.textContent=`CSV останнього пакета (${info.count})`;});
+  const box=el('ogo-export-current');
+  box.replaceChildren(node('p',`Поточний пакет: ${info.count} нових активних редиректів.${info.excluded?` Неактивних / змінених: ${info.excluded}.`:''}`));
+  if(info.count){const a=node('a',`Завантажити CSV цього пакета (${info.count})`);a.href=info.csv;a.className='button button-primary';box.append(a);}
+ }
+ async function exportRefresh(id){
+  try{exportLink(await api('export_info',{export_batch:id}));}
+  catch(_){el('ogo-export-current').textContent='Пакет збережено. Оновіть сторінку, щоб завантажити його CSV.';}
+ }
  async function task(fn) {
   if (busy) return;busy=true;stop=false;
   const controls=[...document.querySelectorAll('.wrap button, .wrap input')];const disabled=new Map(controls.map(c=>[c,c.disabled]));controls.forEach(c=>c.disabled=true);
@@ -58,13 +69,15 @@
   // Show every pair and any SEO warnings before the first mutation.
   const summary=plans.map(({plan:p})=>`${p.old_url} → ${p.new_url}\nНових зв’язків: ${p.added}. ${p.warnings.join(' ')}`).join('\n\n');
   if(!window.confirm(`Об’єднати ${plans.length} пар і ввімкнути 301? Старі позначки залишаться.\n\n${summary}`)){progress('Зміни скасовано.');return;}
+  const batch=await api('export_start',{kind:'merge'});exportLink(batch);
   let ok=0,failed=0;
   for(const {row,plan} of plans){
    if(stop)break;
-   try{const r=await api('merge',{source:plan.source,target:plan.target,hash:plan.hash});done(row,r.message);ok++;}
+   try{const r=await api('merge',{source:plan.source,target:plan.target,hash:plan.hash,export_batch:batch.export_batch});done(row,r.message);exportLink(r.export);ok++;}
    catch(e){status(row,e.message);failed++;}
    progress(`Виконано пар: ${ok}; помилок: ${failed}.`);
   }
+  await exportRefresh(batch.export_batch);
   progress(`${stop?'Зупинено. ':''}Виконано пар: ${ok}; помилок: ${failed}. Для масового видалення джерел перейдіть до розділу 3 → «Підготувати список видалення».`);
  });
  el('ogo-simple-slugs').onclick=()=>task(async()=>{
@@ -79,13 +92,15 @@
  el('ogo-simple-slug-run').onclick=()=>task(async()=>{
   const rows=selected('ogo-simple-slug-list');if(!rows.length){progress('Спочатку знайдіть і виберіть slug.');return;}
   if(!window.confirm(`Змінити ${rows.length} slug та ввімкнути автоматичні 301? Зайняті slug буде пропущено.`)){progress('Зміни скасовано.');return;}
+  const batch=await api('export_start',{kind:'slug'});exportLink(batch);
   let ok=0,failed=0;
   for(const row of rows){
    if(stop)break;
-   try{const r=await api('slug',{id:row.dataset.id,old_slug:row.dataset.old,slug:row.querySelector('.ogo-simple-desired').value.trim()});done(row,`Змінено, 301 активний: ${r.new_url}`);ok++;}
+   try{const r=await api('slug',{id:row.dataset.id,old_slug:row.dataset.old,slug:row.querySelector('.ogo-simple-desired').value.trim(),export_batch:batch.export_batch});done(row,`Змінено, 301 активний: ${r.new_url}`);exportLink(r.export);ok++;}
    catch(e){status(row,e.message);failed++;}
    progress(`Змінено slug: ${ok}; пропущено / помилок: ${failed}.`);
   }
+  await exportRefresh(batch.export_batch);
   progress(`${stop?'Зупинено. ':''}Змінено slug: ${ok}; пропущено / помилок: ${failed}. Оновіть сторінку для списку редиректів. Відкат доступний у розширеній панелі → Перевірка slug.`);
  });
  let deleteLoaded=false;
@@ -126,6 +141,9 @@
   // Newly created rows were not in task()'s initial control list.
   el('ogo-simple-delete-list').querySelectorAll('input').forEach(c=>c.disabled=c.dataset.done==='1');
   progress(`${stop?'Зупинено. ':''}Видалено джерел: ${ok}; пропущено / помилок: ${failed}. Статті та правила 301 збережені. Повторна підготовка списку покаже решту джерел.`);
+ });
+ el('ogo-export-selected').addEventListener('submit',e=>{
+  if(!el('ogo-export-selected').querySelector('input[name="keys[]"]:checked')){e.preventDefault();progress('Виберіть рядки редиректів для експорту.');}
  });
  window.addEventListener('beforeunload',e=>{if(busy){e.preventDefault();e.returnValue='';}});
 })();
