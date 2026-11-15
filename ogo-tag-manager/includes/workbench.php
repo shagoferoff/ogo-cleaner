@@ -21,9 +21,9 @@ trait OGO_Tag_Workbench {
  }
  public static function workbench_assets($hook){
   if($hook!=='tools_page_'.self::SLUG)return;
-  wp_enqueue_script('ogo-tm-workbench',plugins_url('assets/workbench.js',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.7.0',true);
+  wp_enqueue_script('ogo-tm-workbench',plugins_url('assets/workbench.js',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.8.0',true);
   wp_localize_script('ogo-tm-workbench','OGO_TM',['ajax'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_tm_workbench'),'findNonce'=>wp_create_nonce('ogo_tag_find_targets')]);
-  wp_enqueue_style('ogo-tm-workbench',plugins_url('assets/workbench.css',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.7.0');
+  wp_enqueue_style('ogo-tm-workbench',plugins_url('assets/workbench.css',dirname(__DIR__).'/ogo-tag-manager.php'),[], '3.8.0');
  }
  private static function return_filter(){
   $v=sanitize_key(wp_unslash($_POST['return_filter']??$_GET['filter']??'all'));
@@ -89,7 +89,7 @@ trait OGO_Tag_Workbench {
    if($desired===''||strlen($desired)>200||!preg_match('/^[a-z0-9]+(?:[-_][a-z0-9]+)*$/D',$desired)||sanitize_title($desired)!==$desired)$errors[]='Введіть латинський slug: малі літери, цифри, дефіс або підкреслення між частинами.';
    if($desired===$term->slug)$errors[]='Slug уже має це значення.';
    if(isset($staged[$id])||isset($queue[$id])&&($queue[$id]['kind']??'')==='merge')$errors[]='Тег має заплановане або виконане перенесення. Спершу завершіть його.';
-   foreach($queue as $sid=>$decision)if(($decision['kind']??'')==='merge'&&(int)($decision['target']??0)===$id){$errors[]='Тег є ціллю запланованого об’єднання.';break;}
+   foreach($queue as $sid=>$decision)if(($decision['kind']??'')==='merge'&&(int)($decision['target']??0)===$id&&(!isset($staged[$sid])||($staged[$sid]['state']??'')!=='staged')){$errors[]='Тег є ціллю запланованого об’єднання.';break;}
    $existing=$desired!==''?get_term_by('slug',$desired,'post_tag'):false;
    if($existing&&(int)$existing->term_id!==$id){$errors[]='Slug зайнятий: '.$existing->name.' (#'.$existing->term_id.'). Перевірте об’єднання дублікатів.';$conflict=(int)$existing->term_id;}
    if(isset($slugs[$desired])){$errors[]='Однаковий новий slug у цьому пакеті.';$entries[$slugs[$desired]]['errors'][]='Однаковий новий slug у цьому пакеті.';$entries[$slugs[$desired]]['state']='blocked';}
@@ -116,9 +116,11 @@ trait OGO_Tag_Workbench {
   if(!$term||is_wp_error($term)||$term->slug!==$entry['old_slug']||get_term_link($term)!==$entry['old_url'])throw new RuntimeException('Тег або його URL змінилися після перевірки. Створіть новий пакет.');
   $queue=self::queue();$staged=self::staged();
   if(isset($staged[$id])||isset($queue[$id])&&($queue[$id]['kind']??'')==='merge')throw new RuntimeException('Тег уже бере участь у перенесенні.');
-  foreach($queue as $decision)if(($decision['kind']??'')==='merge'&&(int)($decision['target']??0)===$id)throw new RuntimeException('Тег став ціллю об’єднання.');
+  foreach($queue as $sid=>$decision)if(($decision['kind']??'')==='merge'&&(int)($decision['target']??0)===$id&&(!isset($staged[$sid])||($staged[$sid]['state']??'')!=='staged'))throw new RuntimeException('Тег став ціллю об’єднання.');
   $duplicate=get_term_by('slug',$entry['desired'],'post_tag');
   if($duplicate&&(int)$duplicate->term_id!==$id)throw new RuntimeException('Новий slug уже зайнятий. Потрібна повторна перевірка.');
+  // Save an inactive redirect first: it activates only when the live slug differs.
+  self::simple_rule($entry['old_url'],$id,'slug',$entry['old_slug']);
   // Persist intention before touching a term. An interrupted write remains visible for review.
   $jobs[$batch]['items'][$id]['state']='running';self::save_slug_jobs($jobs);
   $result=wp_update_term($id,'post_tag',['slug'=>$entry['desired']]);
@@ -164,7 +166,7 @@ trait OGO_Tag_Workbench {
    $result=($ok?'OK: зв’язки збережені.':'УВАГА: виявлено відмінності.').' Джерело: '.count($a).'; ціль: '.count($b).'; відсутні в цілі: '.$missing.'; втрачені з джерела: '.$lost.'; додані модулем відсутні: '.$not_added.'.';
   }
   $staged[$source]['last_verify']=['at'=>current_time('mysql'),'result'=>$result,'hash'=>self::fingerprint($source,$target)];
-  update_option(self::STAGED,$staged,false);self::journal('verify',$source,$target,['result'=>$result]);
+  self::simple_save(self::STAGED,$staged);self::journal('verify',$source,$target,['result'=>$result]);
   return ['id'=>$source,'ok'=>$ok,'result'=>$result];
  }
  private static function slug_csv_link($batch){return wp_nonce_url(add_query_arg(['action'=>'ogo_tm_slug_csv','batch'=>$batch],admin_url('admin-post.php')),'ogo_tm_slug_csv');}
@@ -215,7 +217,7 @@ trait OGO_Tag_Workbench {
   if(!$visible)echo '<tr><td colspan="6">Немає slug, позначених для перевірки.</td></tr>';
   echo '</tbody></table><div id="ogo-slug-preview" aria-live="polite"></div>';
   $jobs=array_reverse(self::slug_jobs(),true);
-  echo '<h2>Пакети змін slug</h2><p>CSV містить лише успішно змінені адреси вибраного пакета. Імпортуйте його в Redirection, потім перевірте URL. Після відкату потрібно окремо прибрати або змінити імпортоване правило.</p>';
+  echo '<h2>Пакети змін slug</h2><p>Нові зміни автоматично отримують 301 через OGO Tag Manager. CSV — додатковий експорт. Старі пакети 3.7 потребують попереднього імпорту в Redirection. Після відкату правила, імпортовані в Redirection, приберіть окремо.</p>';
   if(!$jobs)echo '<p>Ще немає пакетів.</p>';
   foreach($jobs as $batch=>$job){
    $applied=0;$pending=0;foreach($job['items'] as $entry){$applied+=(int)($entry['state']==='applied');$pending+=(int)($entry['state']==='prepared');}
@@ -223,7 +225,7 @@ trait OGO_Tag_Workbench {
    if($applied)echo '<a class="button" href="'.esc_url(self::slug_csv_link($batch)).'">CSV для Redirection: '.$applied.' змін</a> <button type="button" class="button" data-ogo-check-job="'.esc_attr($batch).'">Перевірити URL пакета</button> ';
    if($pending)echo '<button type="button" class="button" data-ogo-resume="'.esc_attr($batch).'">Переглянути та продовжити</button> ';
    echo '<button type="button" class="button ogo-stop" hidden>Зупинити після поточного</button></p><div class="ogo-progress" role="status" aria-live="polite"></div><table class="widefat striped"><thead><tr><th>Тег</th><th>Стара адреса / slug</th><th>Нова адреса / slug</th><th>Стан / дії</th></tr></thead><tbody>';
-   $states=['prepared'=>'Підготовлено','blocked'=>'Заблоковано','running'=>'Перервано під час запису — перевірте вручну','applied'=>'Змінено; потрібен імпорт / перевірка 301','undone'=>'Відкочено','undo_running'=>'Перервано під час відкату — перевірте вручну','needs_review'=>'Потрібна ручна перевірка'];
+   $states=['prepared'=>'Підготовлено','blocked'=>'Заблоковано','running'=>'Перервано під час запису — перевірте вручну','applied'=>'Змінено; перевірте 301 (для старих пакетів 3.7 потрібен імпорт)','undone'=>'Відкочено','undo_running'=>'Перервано під час відкату — перевірте вручну','needs_review'=>'Потрібна ручна перевірка'];
    foreach($job['items'] as $id=>$entry){
     echo '<tr data-job-id="'.(int)$id.'" data-state="'.esc_attr($entry['state']).'" data-name="'.esc_attr($entry['name']).'" data-desired="'.esc_attr($entry['desired']).'"><td>'.esc_html($entry['name']).' #'.(int)$id.'</td><td><code>'.esc_html($entry['old_url']?:$entry['old_slug']).'</code></td><td><code>'.esc_html($entry['new_url']?:$entry['desired']).'</code></td><td class="ogo-job-status">'.esc_html($states[$entry['state']]??$entry['state']);
     foreach($entry['errors'] as $error)echo '<div>'.esc_html($error).'</div>';
