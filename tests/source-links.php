@@ -30,7 +30,20 @@ source_check('tsn',
 source_check('tsn','<a href="//tsn.ua" rel target>ТСН</a>','<a href="//tsn.ua" rel="nofollow noopener" target="_blank">ТСН</a>',1);
 source_check('tsn','<a href=https://tsn.ua/>ТСН</a>','<a href=https://tsn.ua/ target="_blank" rel="nofollow noopener">ТСН</a>',1);
 
-foreach (array('tsn'=>$tsn,'segodnya'=>$credit) as $project=>$target) {
+$korrespondent='<a href="http://korrespondent.net/"><strong>Корреспондент.net</strong></a>';
+$updated_korrespondent='<a href="http://korrespondent.net/" target="_blank" rel="nofollow noopener"><strong>Корреспондент.net</strong></a>';
+source_check('korrespondent',$korrespondent.$tsn,$updated_korrespondent.$tsn,1);
+source_check('tsn',$korrespondent.$tsn,$korrespondent.$updated,1);
+source_check('korrespondent',
+    '<a href="//news.korrespondent.net/story?q=1&amp;from=ogo" target="_self" rel="sponsored nofollow noreferrer NOOPENER nofollow">Джерело</a>',
+    '<a href="//news.korrespondent.net/story?q=1&amp;from=ogo" target="_blank" rel="nofollow noopener sponsored noreferrer">Джерело</a>',1);
+
+$sources=array(
+    'tsn'=>array($tsn,'tsn.ua'),
+    'segodnya'=>array($credit,'segodnya.ua'),
+    'korrespondent'=>array($korrespondent,'korrespondent.net'),
+);
+foreach ($sources as $project=>list($target,$domain)) {
     $protected='<!-- '.$target.' -->';
     foreach (array('code','pre','style','script','textarea') as $tag) $protected.='<'.$tag.' data-test=">">'.$target.'</'.$tag.'>';
     $protected.='<div data-demo=\''.$target.'\'>зразок</div>';
@@ -45,7 +58,6 @@ foreach (array('tsn'=>$tsn,'segodnya'=>$credit) as $project=>$target) {
     source_check($project,$unclosed,$unclosed,0,1);
     $selfClosing=preg_replace('~>.*$~',' />',$target);
     source_check($project,$selfClosing,$selfClosing,0,1);
-    $domain=$project.'.ua';
     foreach (array('https://'.$domain.'.example/','https://not'.$domain.'/','https://example.org/'.$domain,'https://'.$domain.'@example.org/','https://example.org@'.$domain.'/','mailto:mail@'.$domain,'/news/') as $url) {
         $other='<a href="'.$url.'">Інше джерело</a>';
         source_check($project,$other,$other,0);

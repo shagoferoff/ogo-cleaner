@@ -27,8 +27,9 @@ final class OGO_MC_Engine {
             'garden_urls' => array('label'=>'Дача, сад, город — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'horoscope_urls' => array('label'=>'Гороскоп — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'legacy_missing' => array('label'=>'ОГО — відсутні статті: очищення', 'hosts'=>array('ogo.ua','www.ogo.ua','mail.ogo.ua','gazeta.ogo.ua'), 'photo_callouts'=>false),
-            'segodnya' => array('label'=>'Сегодня', 'hosts'=>array('segodnya.ua'), 'photo_callouts'=>false),
-            'tsn' => array('label'=>'ТСН', 'hosts'=>array('tsn.ua'), 'photo_callouts'=>false),
+            'segodnya' => array('label'=>'Сегодня', 'hosts'=>array('segodnya.ua'), 'photo_callouts'=>false, 'link_action'=>'unwrap'),
+            'tsn' => array('label'=>'ТСН', 'hosts'=>array('tsn.ua'), 'photo_callouts'=>false, 'link_action'=>'attributes'),
+            'korrespondent' => array('label'=>'Корреспондент.net', 'hosts'=>array('korrespondent.net'), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'legacy_urls' => array('label'=>'ОГО — старі URL → актуальні', 'hosts'=>array('ogo.ua','www.ogo.ua','mail.ogo.ua','gazeta.ogo.ua'), 'photo_callouts'=>false),
             'dossier_urls' => array('label'=>'Досьє ОГО → Рівняни', 'hosts'=>array('ogo.ua','www.ogo.ua','ogo.rv.ua','www.ogo.rv.ua'), 'photo_callouts'=>false),
             'vk' => array('label'=>'ВКонтакте — очищення посилань', 'hosts'=>array('vk.com','www.vk.com'), 'photo_callouts'=>false)
@@ -263,10 +264,11 @@ final class OGO_MC_Engine {
         return $lines[0];
     }
     public static function analyze($content, $project = 'media', $base_rules = false) {
-        if (!isset(self::projects()[$project])) throw new InvalidArgumentException('Unknown cleanup project');
-        if ($project === 'segodnya' || $project === 'tsn') {
+        $config=self::projects()[$project]??null;
+        if ($config===null) throw new InvalidArgumentException('Unknown cleanup project');
+        if (isset($config['link_action'])) {
             require_once __DIR__.'/source-links.php';
-            return OGO_MC_Source_Links::analyze($content,$project,self::projects()[$project]['hosts'][0]);
+            return OGO_MC_Source_Links::analyze($content,$config['hosts'][0],$config['link_action']==='attributes');
         }
         if (in_array($project,array('audit','external_audit'),true)) throw new InvalidArgumentException('Use the read-only audit engine');
         // Preserve comments, code and raw text verbatim. Mask length remains identical.

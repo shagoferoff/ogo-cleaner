@@ -74,7 +74,7 @@ foreach (array('legacy_missing','audit','external_audit') as $page) {
     foreach ($projects as $project) {
         archive_assert(strpos($selector[1],'value="'.$project.'"')===false && strpos($html,'project='.$project.'"')!==false,'Archived operation stays reachable via journal links on '.$page.': '.$project);
     }
-    foreach (array('segodnya','tsn') as $project) {
+    foreach (array('segodnya','tsn','korrespondent') as $project) {
         archive_assert(strpos($selector[1],'value="'.$project.'"')!==false,'New operation appears on '.$page.': '.$project);
     }
 }

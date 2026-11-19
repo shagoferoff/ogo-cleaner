@@ -5,6 +5,7 @@
     legacy_missing: "Замінити URL наявних статей і зняти архівні та відсутні посилання зі збереженням тексту й оформлення згідно з попереднім переглядом?",
     segodnya: "Зняти посилання на segodnya.ua та піддомени, зберігши текст, оформлення й абзаци?",
     tsn: "Оновити target і rel посилань на tsn.ua та піддомени згідно з попереднім переглядом?",
+    korrespondent: "Оновити target і rel посилань на korrespondent.net та піддомени згідно з попереднім переглядом?",
     editorial_urls: "Замінити погоджені рубрики на теги за картою, включно зі старими рейтингами; зберегти активну рубрику top, текст і оформлення?",
     woman_urls: "Замінити посилання Жіночого клубу: головну /woman на тег zhinochyj-klub, 8 рубрик на погоджені теги, статті на URL за ID; зберегти текст та оформлення?",
     dim_urls: "Замінити головну рубрики Дім та її сторінки /page:N на https://ogo.ua/tag/dim/, зберігаючи текст та оформлення?",
@@ -25,7 +26,7 @@
   if(ogoMC.replacing) { labels.ready='Готові до заміни'; labels.done='URL замінено'; }
   if(ogoMC.vkMode) { labels.ready='Готові до обробки'; labels.done='Оброблено'; }
   if(ogoMC.unwrapping) { labels.ready='Готові до зняття'; labels.done='Посилання знято'; }
-  if(ogoMC.project==='tsn') { labels.ready='Готові до оновлення'; labels.done='Атрибути оновлено'; }
+  if(ogoMC.updatingAttributes) { labels.ready='Готові до оновлення'; labels.done='Атрибути оновлено'; }
   document.getElementById('ogo-stop').addEventListener('click', () => { stop = true; });
   async function call(mode, ids, selected) {
     const body = new URLSearchParams({action:'ogo_mc',nonce:ogoMC.nonce,mode,run:ogoMC.run,project:ogoMC.project,backup:document.getElementById('ogo-backup')?.checked?'1':''});

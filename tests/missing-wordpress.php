@@ -72,6 +72,7 @@ missing_assert(strpos($html,'ОГО — відсутні статті: очищ�
 $source_links=array(
     'segodnya'=>array('<p>повідомляє "<a href="//news.segodnya.ua/"><b>Сегодня</b></a>"</p>','<p>повідомляє "<b>Сегодня</b>"</p>'),
     'tsn'=>array('<p><a href="https://ru.tsn.ua/" rel="sponsored noreferrer">ТСН</a></p>','<p><a href="https://ru.tsn.ua/" rel="nofollow noopener sponsored noreferrer" target="_blank">ТСН</a></p>'),
+    'korrespondent'=>array('<p><a href="http://korrespondent.net/" target="_self" rel="sponsored">Джерело</a></p>','<p><a href="http://korrespondent.net/" target="_blank" rel="nofollow noopener sponsored">Джерело</a></p>'),
 );
 $source_ids=array();
 $editor=get_user_by('login','ogo_source_editor');

@@ -11,7 +11,7 @@ final class OGO_MC_Source_Links {
         return $host===$domain || (strlen($host)>strlen($suffix) && substr($host,-strlen($suffix))===$suffix);
     }
 
-    private static function tsn_tag($tag) {
+    private static function update_attributes($tag) {
         $attributes=array('target'=>array(),'rel'=>array());
         $rel=array('nofollow'=>'nofollow','noopener'=>'noopener');
         foreach (OGO_MC_Engine::anchor_attributes($tag) as $attribute) {
@@ -57,7 +57,7 @@ final class OGO_MC_Source_Links {
         return $content;
     }
 
-    public static function analyze($content,$project,$domain) {
+    public static function analyze($content,$domain,$update_attributes) {
         $stack=array();
         $edits=array();
         $changed=0;
@@ -77,8 +77,8 @@ final class OGO_MC_Source_Links {
                 $open=array_pop($stack);
                 if (!$open['target']) continue;
                 if ($open['nested']) { ++$review; continue; }
-                if ($project==='tsn') {
-                    $replacement=self::tsn_tag($open['tag']);
+                if ($update_attributes) {
+                    $replacement=self::update_attributes($open['tag']);
                     if ($replacement===$open['tag']) continue;
                     $edits[]=array($open['offset'],strlen($open['tag']),$replacement);
                 } else {
