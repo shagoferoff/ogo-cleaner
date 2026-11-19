@@ -5,13 +5,14 @@ const source = fs.readFileSync(__dirname + '/../ogo-media-cleaner/assets/admin.j
 const config = project => ({
   project, url:'/wp-admin/admin-ajax.php', nonce:'test-nonce', run:'current-run',
   currentRun:'current-run', hasRun:true, complete:true,
-  vkMode:project==='vk', unwrapping:['media_unwrap','catalog'].includes(project),
+  vkMode:project==='vk', unwrapping:project==='segodnya',
   replacing:['day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'].includes(project)
 });
 const response = (complete=true,remaining=0) => ({success:true,data:{state:{complete,scanned:50},stats:[],remaining}});
-async function scenario({project='legacy_missing',mode='apply',selected=false,ids=[],backup=true,confirm=true,overrides={},responses=[response()],stopAt=-1,script=source}={}) {
+async function scenario({project='legacy_missing',mode='apply',selected=false,ids=[],backup=true,hasBackup=true,confirm=true,overrides={},responses=[response()],stopAt=-1,script=source}={}) {
   const elements = new Map();
   for (const id of ['ogo-progress','ogo-stop','ogo-backup']) elements.set(id,{checked:backup,textContent:'',addEventListener(type,fn){this[type]=fn;}});
+  if (!hasBackup) elements.delete('ogo-backup');
   const button={dataset:{mode,selected:selected?'1':''},disabled:false,addEventListener(type,fn){this[type]=fn;}};
   const requests=[],prompts=[],alerts=[];let redirect;
   const context={
@@ -34,7 +35,7 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
   return {requests,prompts,alerts,redirect,button,progress:elements.get('ogo-progress').textContent};
 }
 (async()=>{
-  const projects=['legacy_missing','editorial_urls','woman_urls','dim_urls','nashregion_urls','pets_urls','garden_urls','horoscope_urls','ustream','vk','media_unwrap','catalog','legacy_urls','dossier_urls','day_urls','media','day','blog','gazeta'];
+  const projects=['legacy_missing','segodnya','tsn','editorial_urls','woman_urls','dim_urls','nashregion_urls','pets_urls','garden_urls','horoscope_urls','ustream','vk','legacy_urls','day_urls','day'];
   for(const project of projects) {
     const r=await scenario({project});
     assert.strictEqual(r.prompts.length,1);assert.strictEqual(r.requests.length,1);
@@ -42,7 +43,7 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
     assert.strictEqual(body.project,project);assert.strictEqual(body.action,'ogo_mc');assert.strictEqual(body.nonce,'test-nonce');assert.strictEqual(body.backup,'1');
     assert.ok(r.redirect.includes('project='+project));
     // Optional differential check against a supplied previous release.
-    if(process.env.OGO_PREVIOUS_ADMIN_JS && project!=='gazeta') {
+    if(process.env.OGO_PREVIOUS_ADMIN_JS && !['legacy_missing','segodnya','tsn'].includes(project)) {
       const previous=await scenario({project,script:fs.readFileSync(process.env.OGO_PREVIOUS_ADMIN_JS,'utf8')});
       assert.deepStrictEqual(JSON.parse(JSON.stringify(r)),JSON.parse(JSON.stringify(previous)),'Behavior changed for '+project);
     }
@@ -60,11 +61,15 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
   r=await scenario({responses:[response(true,20)],stopAt:1});assert.strictEqual(r.requests.length,1);
   r=await scenario({mode:'restore',overrides:{run:'old-run'},backup:false});
   assert.ok(r.redirect.includes('run=old-run'));assert.strictEqual(Object.fromEntries(r.requests[0]).run,'old-run');
+  r=await scenario({project:'gazeta',mode:'restore',hasBackup:false,overrides:{archived:true,run:'old-gazeta-run'}});
+  assert.strictEqual(Object.fromEntries(r.requests[0]).project,'gazeta');
+  assert.ok(r.redirect.includes('run=old-gazeta-run'));
+  assert.ok(!r.progress.includes('Перевірено:'));
   r=await scenario({mode:'start',responses:[response(false),response(false),response()]});
   assert.deepStrictEqual(r.requests.map(body=>Object.fromEntries(body).mode),['start','scan','scan']);
   r=await scenario({mode:'scan',responses:[response(false),response()]});assert.strictEqual(r.requests.length,2);
   for(const error of [new Error('Network unavailable'),{success:false,data:'Access denied'}]) {
     r=await scenario({responses:[error]});assert.ok(!r.redirect);assert.ok(r.progress.includes('Зупинено:'));assert.strictEqual(r.button.disabled,false);
   }
-  console.log('Passed admin browser checks: 19 operation prompts, cancellation, backup, stale run, selection, batching, stop, scan, rollback and errors.');
+  console.log('Passed admin browser checks: '+projects.length+' active operation prompts, cancellation, backup, stale run, selection, batching, stop, scan, rollback and errors.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

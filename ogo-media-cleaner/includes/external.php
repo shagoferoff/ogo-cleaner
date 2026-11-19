@@ -195,11 +195,11 @@ final class OGO_MC_External {
         catch(Throwable $e){echo '<div class="notice notice-error"><p>'.esc_html($e->getMessage()).'</p></div>';return;}
         wp_enqueue_script('ogo-external',plugins_url('assets/audit.js',dirname(__DIR__).'/ogo-media-cleaner.php'),array(),self::VERSION,true);
         wp_localize_script('ogo-external','ogoAudit',array('url'=>admin_url('admin-ajax.php'),'action'=>'ogo_mc_external','nonce'=>wp_create_nonce('ogo_mc_external'),'run'=>$current['run']??'','reportUrl'=>self::url()));
-        $projects=OGO_MC_Engine::projects();$labels=self::kinds();
+        $labels=self::kinds();
         ?>
-        <div class="wrap"><h1>OGO cleaner — Міралінкс: ревізія зовнішніх посилань</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>. Лише звіт: текст статей, метаполя anons і дати не змінюються.</strong></p>
-        <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config)echo '<option value="'.esc_attr($key).'" '.selected('external_audit',$key,false).'>'.esc_html($config['label']).'</option>';?></select></label> <button class="button">Відкрити</button></form>
+        <div class="wrap"><h1>OGO Cleaner — Міралінкс: ревізія зовнішніх посилань</h1>
+        <p><strong>Версія <?php echo esc_html(OGO_Media_Cleaner::VERSION); ?>. Лише звіт: текст статей, метаполя anons і дати не змінюються.</strong></p>
+        <?php OGO_Media_Cleaner::navigation('external_audit'); ?>
         <p>Поточний список: 2 215 унікальних ID ОГО лише з 31 видимого місячного аркуша таблиці. Усі приховані аркуші повністю виключені. Зелені записи виключені; повтори об’єднані. Після оновлення почніть нову ревізію.</p>
         <p>Перевіряє лише a[href] у post_content цих статей. Поле anons не читає; інші статті, меню, віджети й метаполя не сканує. Підтримує http, https і //. Внутрішні адреси ogo.ua/ogo.rv.ua та їхніх піддоменів пропускає. my.rv.ua/volyninfo.com та їхні піддомени показує як пов’язані редакційні сайти. Зовнішнє посилання не оголошується рекламою автоматично. HTTP-перевірок немає.</p>
         <p>Порожні результати, відсутні ID, кошик та інші типи записів мають окремий статус. Коментарі, код, скрипти та голі URL пропускаються. Наявність запису за ID ще не підтверджує змістову відповідність статті таблиці: заголовок і адресу слід звірити у звіті.</p>

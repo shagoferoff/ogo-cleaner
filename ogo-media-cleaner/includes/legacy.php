@@ -129,13 +129,14 @@ final class OGO_MC_Legacy {
         }
         return $info;
     }
-    /** Local absence is the only automatic deletion criterion; HTTP 404 is not. */
+    /** Archived paths have no reliable mapping to WordPress IDs. */
     public static function cleanup_decision($info) {
         if (!$info || !is_array($info['parts'])) return array('ignore',null);
         $p=$info['parts'];
-        if (preg_match('~^/archive/[^/]+/site/[^/]+/?$~i',$p['path'] ?? '')) {
+        $date='[0-9]{4}-[0-9]{2}-[0-9]{2}';
+        if (preg_match('~^/(?:archive/'.$date.'/[^/]+|rubrics/(?!view/)[^/]+/'.$date.')/[0-9]+/?$~iD',$p['path'] ?? '')) {
             $probe=$info; $probe['parts']['path']='/articles/view/2000-01-01/1.html';
-            if (self::candidate($probe)) return array('review','Архів /archive/…/site/…: відповідність ID не підтверджена');
+            if (self::candidate($probe)) return array('archive',null);
         }
         if (!self::candidate($info) && !self::review_candidate($info)) return array('ignore',null);
         list($id,$reason)=self::extract_id($info);

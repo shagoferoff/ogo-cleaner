@@ -1,7 +1,8 @@
 <?php
 require_once __DIR__.'/../ogo-media-cleaner/includes/engine.php';
 $lookup=array();
-function get_post($id) { global $lookup; return $lookup[$id]??null; }
+$queried=array();
+function get_post($id) { global $lookup,$queried; $queried[]=$id; return $lookup[$id]??null; }
 function get_permalink($p) { return $p->permalink; }
 function home_url($path='/') { return 'https://ogo.ua'.$path; }
 function is_post_publicly_viewable($p) { return $p->viewable??true; }
@@ -32,25 +33,42 @@ $fixtures=array(
  "<div align=\"justify\">\n<font size=\"2\">".old_link(18385,'Дізнатися більше на сайті  тижневика "ОГО"')."</font>\n</div>",
  "<div align=\"justify\">\n<font size=\"2\">".old_link(18479,'Дізнатися більше ')."</font>\n</div>"
 );
-foreach ($fixtures as $html) missing_check($html,'');
-$archive='<a href="https://ogo.ua/archive/2010-02-04/site/33708">Фабрика ТзОВ "Фапомед" запустила тестове виробництво медичного одягу більше тижня тому</a>';
-foreach (array(false,true) as $exists) {
-    if ($exists) $lookup[33708]=(object)array('post_type'=>'post','post_status'=>'publish','permalink'=>'https://ogo.ua/poppy/');
-    missing_check($archive,$archive,1,0,1);
+foreach ($fixtures as $html) missing_check($html,preg_replace('~</?a(?:\s[^>]*)?>~i','',$html));
+$archives=array(
+    'https://ogo.ua/archive/2010-02-04/site/33708',
+    '/archive/2008-02-24/site/24244',
+    '/archive/2007-12-27/rg/23815',
+    '/rubrics/business/2010-02-11/33952',
+    '/rubrics/popular/2008-03-14/24387/',
+    '/rubrics/online/2010-02-12/33982',
+    '/rubrics/region/2010-02-12/33999',
+    '//www.ogo.ua/archive/2008-02-24/press/24244/?old=1#source',
+);
+$lookup[33708]=(object)array('post_type'=>'post','post_status'=>'publish','permalink'=>'https://ogo.ua/unrelated/');
+$queried=array();
+foreach ($archives as $url) {
+    $archive='<a href="'.$url.'"><strong>Архів</strong> ОГО <img src="x.jpg"></a>';
+    missing_check('<p>'.$archive.'</p>','<p><strong>Архів</strong> ОГО <img src="x.jpg"></p>');
+}
+missing_check('<p><a href=/archive/2008-02-24/site/24244/>Архів</a></p>','<p>Архів</p>');
+if ($queried) throw new RuntimeException('Archive numbers must never be looked up as IDs');
+foreach (array('/rubrics/view/region/','/rubrics/view/2008-02-24/24244','/archive/2008-02-24/site/abc','/archive/2008-02-24/site/24244/extra','https://other.example/archive/2008-02-24/rg/24244','https://ogo.ua.other.example/rubrics/business/2010-02-11/33952') as $url) {
+    $html='<a href="'.$url.'">Інша адреса</a>';
+    missing_check($html,$html,0,0);
 }
 $a=old_link(18230,'<strong>нещодавню</strong> травму');
 foreach (array('Текст '.$a.' далі.','<p>Текст <span>'.$a.'</span> далі.</p>','<div>Текст <font>'.$a.'</font>.</div>') as $html) missing_check($html,str_replace($a,'<strong>нещодавню</strong> травму',$html));
-foreach (array('<p><span><strong>'.old_link(18230).'</strong></span></p>','<div><p>'.old_link(18230).'</p></div>','<span><font>'.old_link(18230).'</font></span><br />') as $html) missing_check($html,'');
-$html='<div>До<p>'.old_link(18230).'</p>Після</div>';missing_check($html,'<div>ДоПісля</div>');
-$html='<div><p>До</p><p>'.old_link(18230).'</p><p>Після</p></div>';missing_check($html,'<div><p>До</p><p>Після</p></div>');
-$html=old_link(18230).'<br />Текст';missing_check($html,'Текст');
-$html='До<br>'.old_link(18230).'<br>Після';missing_check($html,'До<br>Після');
-$html='До'."\n\n".old_link(18230)."\n\n".'Після';missing_check($html,'До'."\n\n\n\n".'Після');
-// Additional text and independent links prevent block deletion.
+foreach (array('<p><span><strong>'.old_link(18230).'</strong></span></p>','<div><p>'.old_link(18230).'</p></div>','<span><font>'.old_link(18230).'</font></span><br />') as $html) missing_check($html,str_replace(old_link(18230),'Стаття',$html));
+$html='<div>До<p>'.old_link(18230).'</p>Після</div>';missing_check($html,'<div>До<p>Стаття</p>Після</div>');
+$html='<div><p>До</p><p>'.old_link(18230).'</p><p>Після</p></div>';missing_check($html,'<div><p>До</p><p>Стаття</p><p>Після</p></div>');
+$html=old_link(18230).'<br />Текст';missing_check($html,'Стаття<br />Текст');
+$html='До<br>'.old_link(18230).'<br>Після';missing_check($html,'До<br>Стаття<br>Після');
+$html='До'."\n\n".old_link(18230)."\n\n".'Після';missing_check($html,'До'."\n\n".'Стаття'."\n\n".'Після');
+// Preserve neighboring text and links.
 $html='<p>'.old_link(18230).' <a href="https://example.com/">Інше</a></p>';
 missing_check($html,'<p>Стаття <a href="https://example.com/">Інше</a></p>');
 $html='<p>'.old_link(18230).' і '.old_link(18278).'</p>'; missing_check($html,'<p>Стаття і Стаття</p>',2,2);
-$html='<p>'.old_link(18230).'</p><p>'.old_link(18278).'</p>';missing_check($html,'',2,2);
+$html='<p>'.old_link(18230).'</p><p>'.old_link(18278).'</p>';missing_check($html,'<p>Стаття</p><p>Стаття</p>',2,2);
 // Existing records are never classified as missing, regardless of availability.
 $lookup[18230]=(object)array('post_type'=>'post','post_status'=>'publish','post_password'=>'','permalink'=>'https://ogo.ua/current/');
 $html='<p>'.old_link(18230).'</p>';missing_check($html,'<p><a href="https://ogo.ua/current/">Стаття</a></p>');
@@ -58,7 +76,7 @@ foreach (array('post_status'=>'draft','post_type'=>'page','post_password'=>'test
     $save=clone $lookup[18230];$lookup[18230]->$key=$value; missing_check($html,$html,1,0,1); $lookup[18230]=$save;
 }
 $html='<p>'.old_link(18230).'</p><p>'.old_link(18278).'</p>';
-missing_check($html,'<p><a href="https://ogo.ua/current/">Стаття</a></p>',2,2);
+missing_check($html,'<p><a href="https://ogo.ua/current/">Стаття</a></p><p>Стаття</p>',2,2);
 unset($lookup[18230]);
 foreach (array('https://lt.ogo.ua/articles/view/2010-02-12/18230.html','https://ogo.ua/articles/view/2010-02-12/18230.html?x=1','https://ogo.ua/articles/view/2010-02-12/18230.htmlhttps://ogo.ua/articles/view/2010-02-12/18278.html') as $url) {
     $html='<p><a href="'.$url.'">Стаття</a></p>';missing_check($html,$html,1,0,1);
@@ -68,11 +86,12 @@ foreach (array('script','style','textarea','pre','code') as $tag) {
 }
 $html='<!-- '.old_link(18230).' -->';missing_check($html,$html,0,0);
 $html="<div data-fake='".old_link(18230)."'>x</div>";missing_check($html,$html,0,0);
-foreach (array('<p>'.old_link(18230).'</div>','<p>'.old_link(18230),'<a href="/articles/view/2010-02-12/18230.html"><a href="https://example.com/">nested</a></a>',old_link(18230,'<img src="x.jpg">')) as $html) missing_check($html,$html,1,0,1);
+foreach (array('<p>'.old_link(18230).'</div>','<p>'.old_link(18230),'<a href="/articles/view/2010-02-12/18230.html"><a href="https://example.com/">nested</a></a>') as $html) missing_check($html,$html,1,0,1);
 $html='<p><img src="x.jpg">'.old_link(18230).'</p>';missing_check($html,'<p><img src="x.jpg">Стаття</p>');
-$html='<div id="keep">'.old_link(18230).'</div>';missing_check($html,'<div id="keep"></div>');
-// Preserve named anchor destinations for manual review.
-$html='<p>'.old_link(18230,'Стаття',' id="keep"').'</p>';missing_check($html,$html,1,0,1);
+$html='<div id="keep">'.old_link(18230).'</div>';missing_check($html,'<div id="keep">Стаття</div>');
+// Removing an anchor leaves the contents of that anchor byte-for-byte.
+$html='<p>'.old_link(18230,'Стаття',' id="keep"').'</p>';missing_check($html,'<p>Стаття</p>');
+missing_check(old_link(18230,'<img src="x.jpg">'),'<img src="x.jpg">');
 // A query error must never be interpreted as proof of absence.
 $wpdb=(object)array('last_error'=>'database unavailable');
 $thrown=false;

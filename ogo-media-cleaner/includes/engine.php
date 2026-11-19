@@ -3,6 +3,10 @@
 final class OGO_MC_Engine {
     private const TAG = '<(?:[^>"\']|"[^"]*"|\'[^\']*\')*>';
     private const ANCHOR = '~<a\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?</a\s*>~i';
+    private const ARCHIVED = array('media','media_unwrap','blog','gazeta','catalog','dossier_urls');
+    public static function is_archived($project) {
+        return in_array($project,self::ARCHIVED,true);
+    }
     public static function projects() {
         return array(
             'external_audit' => array('label'=>'Міралінкс — ревізія зовнішніх посилань', 'hosts'=>array(), 'photo_callouts'=>false),
@@ -23,16 +27,35 @@ final class OGO_MC_Engine {
             'garden_urls' => array('label'=>'Дача, сад, город — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'horoscope_urls' => array('label'=>'Гороскоп — рубрика → тег', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'legacy_missing' => array('label'=>'ОГО — відсутні статті: очищення', 'hosts'=>array('ogo.ua','www.ogo.ua','mail.ogo.ua','gazeta.ogo.ua'), 'photo_callouts'=>false),
+            'segodnya' => array('label'=>'Сегодня', 'hosts'=>array('segodnya.ua'), 'photo_callouts'=>false),
+            'tsn' => array('label'=>'ТСН', 'hosts'=>array('tsn.ua'), 'photo_callouts'=>false),
             'legacy_urls' => array('label'=>'ОГО — старі URL → актуальні', 'hosts'=>array('ogo.ua','www.ogo.ua','mail.ogo.ua','gazeta.ogo.ua'), 'photo_callouts'=>false),
             'dossier_urls' => array('label'=>'Досьє ОГО → Рівняни', 'hosts'=>array('ogo.ua','www.ogo.ua','ogo.rv.ua','www.ogo.rv.ua'), 'photo_callouts'=>false),
             'vk' => array('label'=>'ВКонтакте — очищення посилань', 'hosts'=>array('vk.com','www.vk.com'), 'photo_callouts'=>false)
         );
     }
-    public static function href_info($tag) {
-        if (!preg_match('~^<a\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', $tag, $m)) return null;
+    public static function anchor_attributes($tag) {
+        if (!preg_match('~^<a(?=[\s/>])(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', $tag, $m)) return array();
         preg_match_all('~([^\s=<>/]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+)))?~', substr($m[0], 2, -1), $attrs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL);
+        return $attrs;
+    }
+    public static function html_tokens($content) {
+        $opaque='<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|pre|code)(?=[\s/>])(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\1\s*>|$)';
+        $tag='<(?:/?[a-z]|[!?])(?:[^<>"\']|"[^"]*"|\'[^\']*\')*>';
+        preg_match_all('~'.$opaque.'|'.$tag.'~i',$content,$tokens,PREG_OFFSET_CAPTURE);
+        return $tokens[0];
+    }
+    public static function self_closing_anchor($tag) {
+        if (!preg_match('~/\s*>$~',$tag,$slash,PREG_OFFSET_CAPTURE)) return false;
+        foreach (self::anchor_attributes($tag) as $attribute) {
+            // A trailing slash in an unquoted value belongs to that value.
+            if ($attribute[4][1]>=0 && 2+$attribute[4][1]+strlen($attribute[4][0])>$slash[0][1]) return false;
+        }
+        return true;
+    }
+    public static function href_info($tag) {
         $hrefs = array();
-        foreach ($attrs as $a) {
+        foreach (self::anchor_attributes($tag) as $a) {
             if (strtolower($a[1][0]) !== 'href') continue;
             $value = null;
             foreach (array(2,3,4) as $i) if (isset($a[$i][0])) { $value = $a[$i]; break; }
@@ -241,6 +264,10 @@ final class OGO_MC_Engine {
     }
     public static function analyze($content, $project = 'media', $base_rules = false) {
         if (!isset(self::projects()[$project])) throw new InvalidArgumentException('Unknown cleanup project');
+        if ($project === 'segodnya' || $project === 'tsn') {
+            require_once __DIR__.'/source-links.php';
+            return OGO_MC_Source_Links::analyze($content,$project,self::projects()[$project]['hosts'][0]);
+        }
         if (in_array($project,array('audit','external_audit'),true)) throw new InvalidArgumentException('Use the read-only audit engine');
         // Preserve comments, code and raw text verbatim. Mask length remains identical.
         $masked = preg_replace_callback('~<!--[\s\S]*?-->|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?</\1\s*>~i', function($m) { return str_repeat(' ', strlen($m[0])); }, $content);

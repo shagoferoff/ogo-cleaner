@@ -1,6 +1,9 @@
 # ogo-cleaner
 
-WordPress-плагін OGO cleaner; код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
+WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
+
+[ZIP 1.31.0](dist/ogo-cleaner-1.31.0.zip) оновлює очищення архівних посилань, додає
+«Сегодня» і «ТСН» та переносить завершені операції до «Журналів завершених очищень».
 
 База сайту: `ogo2023_ogo`; префікс таблиць **`wp_`**. Плагін визначає префікс через `$wpdb->prefix`.
 
@@ -21,6 +24,7 @@ php tests/editorial.php
 php tests/legacy.php
 php tests/missing.php
 php tests/external.php
+php tests/source-links.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```
@@ -54,7 +58,7 @@ OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/editorial-wordpress.php
 OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/legacy-wordpress.php
 ```
 
-Очищення посилань на відсутні статті: [docs/missing.md](docs/missing.md).
+Очищення архівних посилань і посилань на відсутні статті описано в [docs/missing.md](docs/missing.md).
 
 ```sh
 OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/missing-wordpress.php
@@ -90,7 +94,8 @@ phpMyAdmin → SQL → виконати запит → експортувати 
 Доступ для редакторів: [docs/editor-access.md](docs/editor-access.md).
 Релізи: OGO cleaner 1.28.0 та OGO Miralinks Audit 1.1.0.
 
-Рівненська газета: посилання в тексті, окремі заклики та контактні блоки: [docs/gazeta.md](docs/gazeta.md).
+Правила історичного очищення Рівненської газети описано в [docs/gazeta.md](docs/gazeta.md).
+Інтеграційний тест перевіряє звіти й відкат усіх завершених операцій:
 
 ```sh
 OGO_TEST_WP_ROOT=/path/to/test-wordpress php tests/gazeta-wordpress.php

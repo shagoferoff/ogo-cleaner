@@ -196,7 +196,7 @@ final class OGO_MC_Audit {
         $s = $run !== '' ? self::state($run) : array();
         list($category,$group) = self::filters($_GET);
         $page = max(1,absint($_GET['paged'] ?? 1));
-        $labels = OGO_MC_Audit_Engine::categories(); $projects = OGO_MC_Engine::projects();
+        $labels = OGO_MC_Audit_Engine::categories();
         $stats = array('totals'=>array('urls'=>0,'links'=>0,'materials'=>0),'categories'=>array()); $rows = array();
         try {
             if ($s) { $stats = self::stats($run); $rows = $group !== '' ? self::details($run,$category,$group,50,($page-1)*50) : self::groups($run,$category,30,($page-1)*30); }
@@ -204,9 +204,9 @@ final class OGO_MC_Audit {
         wp_enqueue_script('ogo-audit',plugins_url('assets/audit.js',dirname(__DIR__).'/ogo-media-cleaner.php'),array(),self::VERSION,true);
         wp_localize_script('ogo-audit','ogoAudit',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc_audit'),'run'=>$current['run'] ?? '', 'reportUrl'=>self::url()));
         ?>
-        <div class="wrap"><h1>OGO cleaner — Ревізія старих посилань</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>. Лише звіт: статті та їхні дати не змінюються.</strong></p>
-        <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach ($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected('audit',$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
+        <div class="wrap"><h1>OGO Cleaner — Ревізія старих посилань</h1>
+        <p><strong>Версія <?php echo esc_html(OGO_Media_Cleaner::VERSION); ?>. Лише звіт: статті та їхні дати не змінюються.</strong></p>
+        <?php OGO_Media_Cleaner::navigation('audit'); ?>
         <p>Перевіряє посилання a[href] у post_content типів post, page, rivnenschina, dovidka, phogo, press: опубліковані, приватні, чернетки, на модерації та заплановані. Меню, віджети, метаполя, голі URL, коментарі та блоки коду не сканує. Домени: ogo.ua, ogo.rv.ua та їхні піддомени. HTTP-перевірки сторінок не виконує.</p>
         <p>Активні лише рубрики головного сайту: exclusive, life, nadzvychaini, region, opytuvannya, consumer, top, ukraine, foto-dnya. Інші адреси не оголошуються непрацюючими автоматично. Відомий відповідник — пропозиція з карти, а не готова заміна.</p>
         <p>Варіанти http/https, www, кінцевий слеш, якорі та числові сторінки рубрик згруповані. Оригінальні href збережені в деталях. Відносні посилання визначаються від адреси матеріалу. Параметри звичайних сторінок зберігають окремі групи, щоб не змішувати різні записи.</p>

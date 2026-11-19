@@ -2,8 +2,9 @@
   'use strict';
   // Confirmation text is explicit for every operation; no code is constructed from it.
   const applyPrompts = {
-    gazeta: "Зняти посилання Рівненської газети в тексті та видалити окремі абзаци за погодженими патернами й контактні блоки згідно з попереднім переглядом?",
-    legacy_missing: "Обробити старі посилання: наявні статті отримають актуальний URL; для відсутніх зняти посилання в реченнях або видалити окремі блоки разом із текстом згідно з попереднім переглядом?",
+    legacy_missing: "Замінити URL наявних статей і зняти архівні та відсутні посилання зі збереженням тексту й оформлення згідно з попереднім переглядом?",
+    segodnya: "Зняти посилання на segodnya.ua та піддомени, зберігши текст, оформлення й абзаци?",
+    tsn: "Оновити target і rel посилань на tsn.ua та піддомени згідно з попереднім переглядом?",
     editorial_urls: "Замінити погоджені рубрики на теги за картою, включно зі старими рейтингами; зберегти активну рубрику top, текст і оформлення?",
     woman_urls: "Замінити посилання Жіночого клубу: головну /woman на тег zhinochyj-klub, 8 рубрик на погоджені теги, статті на URL за ID; зберегти текст та оформлення?",
     dim_urls: "Замінити головну рубрики Дім та її сторінки /page:N на https://ogo.ua/tag/dim/, зберігаючи текст та оформлення?",
@@ -13,12 +14,8 @@
     horoscope_urls: "Замінити посилання рубрики ogo.ua/rubrics/view/goroskop на https://ogo.ua/tag/goroskop/, зберігаючи текст та оформлення?",
     ustream: "Видалити впізнані плеєри Ustream, стандартні підписи та блоки, що стали порожніми, згідно з попереднім переглядом?",
     vk: "Обробити посилання ВК: зберегти текст джерел та імена, прибрати пункти ВК зі впізнаних списків і видалити впізнані застарілі абзаци згідно з попереднім переглядом?",
-    media_unwrap: "Зняти решту посилань media.ogo.ua, зберігши весь текст і абзаци? Окреме очищення запрошень до галерей потрібно виконати перед цією операцією.",
-    catalog: "Зняти посилання catalog.ogo.ua, зберігши весь текст і абзаци?",
     legacy_urls: "Замінити старі внутрішні URL на актуальні адреси статей за збереженими ID WordPress, зберігаючи текст та оформлення?",
-    dossier_urls: "Замінити старі посилання на досьє ОГО на підтверджені сторінки Рівнян, зберігаючи текст та оформлення?",
     day_urls: "Замінити адреси day.ogo.ua/articles/view/ на https://ogo.ua/articles/view/, зберігаючи текст?",
-    media: "Видалити окремі посилання та впізнані абзаци-запрошення до фото- і відеогалерей Медіа разом із їхнім текстом згідно з попереднім переглядом?",
     day: "Видалити окремі рекомендації та підписи джерела day.ogo.ua, а в реченнях зняти посилання зі збереженням тексту згідно з попереднім переглядом?",
   };
   const defaultApplyPrompt = "Видалити окремі посилання разом із текстом у готових матеріалах?";
@@ -28,16 +25,18 @@
   if(ogoMC.replacing) { labels.ready='Готові до заміни'; labels.done='URL замінено'; }
   if(ogoMC.vkMode) { labels.ready='Готові до обробки'; labels.done='Оброблено'; }
   if(ogoMC.unwrapping) { labels.ready='Готові до зняття'; labels.done='Посилання знято'; }
+  if(ogoMC.project==='tsn') { labels.ready='Готові до оновлення'; labels.done='Атрибути оновлено'; }
   document.getElementById('ogo-stop').addEventListener('click', () => { stop = true; });
   async function call(mode, ids, selected) {
-    const body = new URLSearchParams({action:'ogo_mc',nonce:ogoMC.nonce,mode,run:ogoMC.run,project:ogoMC.project,backup:document.getElementById('ogo-backup').checked?'1':''});
+    const body = new URLSearchParams({action:'ogo_mc',nonce:ogoMC.nonce,mode,run:ogoMC.run,project:ogoMC.project,backup:document.getElementById('ogo-backup')?.checked?'1':''});
     if(selected) body.set('selected','1');
     if(ids) ids.forEach(id => body.append('ids[]',id));
     const response = await fetch(ogoMC.url,{method:'POST',body,credentials:'same-origin'});
     const result = await response.json();
     if(!result.success) throw new Error(typeof result.data==='string'?result.data:'Помилка сервера.');
     const d = result.data;
-    progress.textContent = `Перевірено: ${d.state.scanned}. ${d.state.complete?'Сканування завершено.':'Сканування триває.'} ` + d.stats.map(s=>`${labels[s.status]||s.status}: ${s.materials}`).join('; ');
+    const scanProgress = ogoMC.archived ? '' : `Перевірено: ${d.state.scanned}. ${d.state.complete?'Сканування завершено.':'Сканування триває.'} `;
+    progress.textContent = scanProgress + d.stats.map(s=>`${labels[s.status]||s.status}: ${s.materials}`).join('; ');
     return d;
   }
   document.querySelectorAll('[data-mode]').forEach(button=>button.addEventListener('click',async()=>{

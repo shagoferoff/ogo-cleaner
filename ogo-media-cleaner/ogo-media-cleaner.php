@@ -1,8 +1,8 @@
 <?php
 /**
- * Plugin Name: OGO cleaner
- * Description: Попередній перегляд, пакетне видалення посилань Медіа, Блогів, Рівне святкове та контактів Рівненської газети; зняття посилань Каталогу й очищення ВК, заміна старих URL за збереженими ID WordPress, видалення плеєрів Ustream та журнал відкату.
- * Version: 1.30.0
+ * Plugin Name: OGO Cleaner
+ * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
+ * Version: 1.31.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -13,7 +13,8 @@ require_once __DIR__ . '/includes/engine.php';
 require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/external.php';
 final class OGO_Media_Cleaner {
-    private const VERSION = '1.30.0';
+    public const VERSION = '1.31.0';
+    private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
     private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
@@ -52,7 +53,7 @@ final class OGO_Media_Cleaner {
     public static function init() {
         OGO_MC_Audit::init();
         OGO_MC_External::init();
-        add_action('admin_menu', function(){ add_management_page('OGO cleaner','OGO cleaner','edit_others_posts','ogo-media-cleaner',array(__CLASS__,'page')); });
+        add_action('admin_menu', function(){ add_management_page('OGO Cleaner','OGO Cleaner','edit_others_posts','ogo-media-cleaner',array(__CLASS__,'page')); });
         add_action('admin_init',function(){ if (current_user_can('manage_options') && get_option('ogo_mc_schema')!=='1.3.1') self::activate(); });
         add_action('wp_ajax_ogo_mc',array(__CLASS__,'ajax'));
     }
@@ -63,12 +64,35 @@ final class OGO_Media_Cleaner {
         global $wpdb; $t=self::table();
         return $wpdb->get_results($wpdb->prepare("SELECT status,COUNT(*) AS materials,SUM(removed) AS links,SUM(review) AS review FROM $t WHERE run_id=%s AND project=%s GROUP BY status",$run,$project),ARRAY_A);
     }
+    public static function navigation($project) {
+        $projects=OGO_MC_Engine::projects();
+        ?>
+        <form method="get">
+            <input type="hidden" name="page" value="ogo-media-cleaner">
+            <label>Проєкт / операція <select name="project" required>
+                <?php if (OGO_MC_Engine::is_archived($project)): ?><option value="" selected disabled>Виберіть операцію</option><?php endif; ?>
+                <?php foreach ($projects as $key=>$config): if (OGO_MC_Engine::is_archived($key)) continue; ?>
+                    <option value="<?php echo esc_attr($key); ?>" <?php selected($project,$key); ?>><?php echo esc_html($config['label']); ?></option>
+                <?php endforeach; ?>
+            </select></label> <button class="button">Відкрити</button>
+        </form>
+        <details <?php if (OGO_MC_Engine::is_archived($project)) echo 'open'; ?>>
+            <summary>Журнали завершених очищень</summary>
+            <ul>
+                <?php foreach ($projects as $key=>$config): if (!OGO_MC_Engine::is_archived($key)) continue; ?>
+                    <li><a href="<?php echo esc_url(add_query_arg(array('page'=>'ogo-media-cleaner','project'=>$key),admin_url('tools.php'))); ?>"><?php echo esc_html($config['label']); ?></a></li>
+                <?php endforeach; ?>
+            </ul>
+        </details>
+        <?php
+    }
     public static function ajax() {
         if (!current_user_can('edit_others_posts')) wp_send_json_error('Недостатньо прав.',403);
         check_ajax_referer('ogo_mc','nonce');
         global $wpdb; $t=self::table(); $mode=sanitize_key($_POST['mode'] ?? '');
         $project=sanitize_key(wp_unslash($_POST['project']??'media'));
         if (!self::valid_project($project)) wp_send_json_error('Невідомий проєкт.');
+        if (OGO_MC_Engine::is_archived($project) && $mode!=='restore') wp_send_json_error('Для завершеного очищення доступні журнал і відкат.',403);
         if (in_array($project,array('audit','external_audit'),true)) wp_send_json_error('Ревізія лише складає звіт. Використайте окремі кнопки сканування; заміни та відкат тут недоступні.');
         if (get_option('ogo_mc_schema')!=='1.3.1') wp_send_json_error('Не вдалося оновити таблицю журналу. Очищення не запущено.');
         $s=self::state($project);
@@ -94,7 +118,7 @@ final class OGO_Media_Cleaner {
                 foreach ($posts as $p) {
                     $a=OGO_MC_Engine::analyze($p->post_content,$project);
                     if ($a['total']) {
-                        $ready=$a['removed'] && (!in_array($project,array('gazeta','legacy_missing','legacy_urls','media','media_unwrap','dossier_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
+                        $ready=$a['removed'] && (!in_array($project,array('legacy_missing','legacy_urls','segodnya','tsn','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true) || !$a['review']);
                         $ok=$wpdb->insert($t,array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??''));
                         if (!$ok) wp_send_json_error('Не вдалося записати звіт. Перезапустіть сканування.');
                     }
@@ -120,7 +144,7 @@ final class OGO_Media_Cleaner {
             foreach ($rows as $r) self::change($r,$mode);
         } else { wp_send_json_error('Невідома дія.'); }
         $remaining=isset($status)?(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $t WHERE run_id=%s AND status=%s AND project=%s",$operation_run,$status,$project)):0;
-        wp_send_json_success(array('state'=>$s,'stats'=>self::stats($operation_run??$s['run'],$project),'remaining'=>$remaining));
+        wp_send_json_success(array('state'=>$s,'stats'=>self::stats($operation_run??($s['run']??''),$project),'remaining'=>$remaining));
     }
     private static function change($r,$mode) {
         global $wpdb; $t=self::table(); $p=get_post($r->post_id);
@@ -165,43 +189,56 @@ final class OGO_Media_Cleaner {
         if (sanitize_key(wp_unslash($_GET['project']??''))==='audit') { OGO_MC_Audit::page(); return; }
         if (get_option('ogo_mc_schema')!=='1.3.1') { echo '<div class="notice notice-error"><p>Не вдалося оновити таблицю журналу. Очищення недоступне. Перевірте права користувача бази на зміну таблиць.</p></div>'; return; }
         global $wpdb; $t=self::table();
-        $project=sanitize_key(wp_unslash($_GET['project']??'media'));
+        $project=sanitize_key(wp_unslash($_GET['project']??self::DEFAULT_PROJECT));
         if ($project==='gazeta_sources') $project='gazeta';
-        if (!self::valid_project($project)) $project='media';
+        if (!self::valid_project($project)) $project=self::DEFAULT_PROJECT;
+        $archived=OGO_MC_Engine::is_archived($project);
         $s=self::state($project); $projects=OGO_MC_Engine::projects();
         $replacing=in_array($project,array('day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true);
-        $unwrapping=in_array($project,array('catalog','media_unwrap'),true);
+        $unwrapping=in_array($project,array('catalog','media_unwrap','segodnya'),true);
+        $tsn_mode=$project==='tsn';
         $vk_mode=$project==='vk';
         $ustream_mode=$project==='ustream';
-        $count_label=$project==='legacy_missing'?'посилань для обробки/оброблених':($ustream_mode?'елементів для видалення/видалених':(($vk_mode || $project==='day')?'посилань для обробки/оброблених':($project==='gazeta'?'збігів для обробки/оброблених':($unwrapping?'посилань для зняття/знятих':($replacing?'посилань для заміни/замінених':'посилань для видалення/видалених')))));
-        $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):($s['run']??'');
+        $runs=$wpdb->get_col($wpdb->prepare("SELECT run_id FROM $t WHERE project=%s GROUP BY run_id ORDER BY MAX(id) DESC".($archived?'':' LIMIT 30'),$project));
+        $operation_run=$s['run']??($runs[0]??'');
+        $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):$operation_run;
         $page=max(1,absint($_GET['paged']??1));
         $rows=$wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE run_id=%s AND project=%s ORDER BY id LIMIT 20 OFFSET %d",$run,$project,($page-1)*20));
-        $runs=$wpdb->get_col($wpdb->prepare("SELECT run_id FROM $t WHERE project=%s GROUP BY run_id ORDER BY MAX(id) DESC LIMIT 30",$project));
         $labels=array('ready'=>'Готово до очищення','review'=>'Ручна перевірка','done'=>'Очищено','restored'=>'Відновлено','conflict'=>'Пропущено: конфлікт');
         if ($replacing) { $labels['ready']='Готово до заміни URL'; $labels['done']='URL замінено'; }
         if ($vk_mode) { $labels['ready']='Готово до обробки'; $labels['done']='Оброблено'; }
         if ($unwrapping) { $labels['ready']='Готово до зняття посилань'; $labels['done']='Посилання знято'; }
+        if ($tsn_mode) { $labels['ready']='Готово до оновлення атрибутів'; $labels['done']='Атрибути оновлено'; }
+        $count_label='посилань для видалення/видалених';
+        $row_action='Видалити';
+        if ($replacing) { $count_label='посилань для заміни/замінених'; $row_action='Замінити'; }
+        if ($unwrapping) { $count_label='посилань для зняття/знятих'; $row_action='Зняти'; }
+        if ($tsn_mode) { $count_label='посилань для оновлення/оновлених'; $row_action='Оновити'; }
+        if ($project==='legacy_missing' || $vk_mode || $project==='day') { $count_label='посилань для обробки/оброблених'; $row_action='Обробити'; }
+        if ($ustream_mode) { $count_label='елементів для видалення/видалених'; $row_action='Видалити елементів'; }
+        if ($project==='gazeta') { $count_label='збігів для обробки/оброблених'; $row_action='Обробити збігів'; }
+        $apply_selected='Очистити вибрані';
+        $apply_all='Очистити всі готові';
+        if ($replacing) { $apply_selected='Замінити вибрані URL'; $apply_all='Замінити всі готові URL'; }
+        if ($unwrapping) { $apply_selected='Зняти вибрані посилання'; $apply_all='Зняти всі готові посилання'; }
+        if ($vk_mode) { $apply_selected='Обробити вибрані'; $apply_all='Обробити всі готові'; }
+        if ($tsn_mode) { $apply_selected='Оновити вибрані'; $apply_all='Оновити всі готові'; }
         wp_enqueue_script('ogo-mc',plugins_url('assets/admin.js',__FILE__),array(), self::VERSION,true);
-        wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode));
+        wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'vkMode'=>$vk_mode,'archived'=>$archived));
         ?>
-        <div class="wrap"><h1>OGO cleaner</h1>
-        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong> Оновлено правила у пункті «Рівненська газета»: зняття посилань у тексті та видалення окремих абзаців за погодженими патернами. Доступ адміністратора та редактора збережено. Після оновлення натисніть «Нове сканування».</p>
-        <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><label>Проєкт / операція <select name="project"><?php foreach($projects as $key=>$config) echo '<option value="'.esc_attr($key).'" '.selected($project,$key,false).'>'.esc_html($config['label']).'</option>'; ?></select></label> <button class="button">Відкрити</button></form>
+        <div class="wrap"><h1>OGO Cleaner</h1>
+        <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong></p>
+        <?php self::navigation($project); ?>
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
-        <?php if ($ustream_mode): ?>
+        <?php if ($archived): ?>
+        <p>Виберіть попередній запуск у журналі, щоб переглянути зміни або відкотити очищення.</p>
+        <?php elseif ($ustream_mode): ?>
         <p>Видаляє закриті iframe з порожнім вмістом та src на точні домени <code>ustream.tv</code> / <code>www.ustream.tv</code>, шляхи <code>/embed/ID</code> або <code>/embed/recorded/ID</code>. Порядок атрибутів і стилі не заважають. Підтримує http, https та //.</p>
         <p>Видаляє стандартні посилання-підписи «Live streaming video by Ustream» та «Video streaming by Ustream» на головну Ustream. Прибирає br між видаленим плеєром і підписом, а також прості абзаци й блоки HTML/paragraph Gutenberg, що стали порожніми. Текст статей та інше відео зберігає. Нестандартні посилання, невпізнані плеєри й незакриті теги залишає для перевірки.</p>
         <p>Лічильник показує елементи Ustream: один iframe та один підпис — це два збіги. Кількість плеєрів, підписів і порожніх блоків наведено окремо в кожному рядку журналу.</p>
         <?php elseif ($vk_mode): ?>
         <p>Знімає посилання на точні домени <code>vk.com</code> і <code>www.vk.com</code> зі збереженням імен, назв груп, джерел, оформлення та іншого тексту. <code>vovk.com</code> не змінює.</p>
         <p>У простих списках «Або ж пишіть нам у соцмережах…» прибирає пункти ВК та роздільники, залишаючи Facebook. Видаляє окремий абзац «Група зустрічі: vk.com/…» і впізнаний абзац конкурсу книг із двома наведеними email. Інші конкурси автоматично не видаляє. Посилання з голою адресою ВК, складні списки й неоднозначні шаблони залишає для перевірки. Результат кожного правила видно в журналі.</p>
-        <?php elseif ($unwrapping): ?>
-        <?php if ($project==='media_unwrap'): ?><p><strong>Спочатку виконайте очищення в режимі «Медіа».</strong> Після нього запустіть нове сканування цієї окремої операції. Вона знімає решту посилань media.ogo.ua / www.media.ogo.ua зі збереженням тексту, включно з посиланнями всередині речень. Запрошення до галерей тут не видаляються: перевіряйте попередній перегляд, щоб не залишити беззмістовний текст. Якщо після зняття посилань лишиться гола згадка домену, матеріал піде в ручну перевірку.</p><?php endif; ?>
-        <p>Знімає лише оболонку <code>&lt;a href="…"&gt;…&lt;/a&gt;</code> з посилань на точний домен <code><?php echo esc_html(implode(", ",$projects[$project]["hosts"])); ?></code> через http, https або //. Текст, абзаци, пробіли, вкладене жирне оформлення та зображення зберігаються. Стилі самого посилання видаляються разом із тегом a. Інші посилання не змінює; незакриті чи вкладені посилання залишає для перевірки.</p>
-        <?php elseif ($project==='gazeta'): ?>
-        <p>Знімає посилання gazeta.rv.ua / www.gazeta.rv.ua всередині тексту, залишаючи слова й оформлення. Зберігає підписи «За матеріалами…» та «Джерело:…». Видаляє цілі окремі абзаци з погодженими закликами читати далі, умовами конкурсів та іншими наданими патернами. Працює з p, div, текстовими обгортками, br, порожніми рядками та абзацами Gutenberg. Звичайний сусідній текст та інші сайти зберігає.</p>
-        <p>Лічильник показує збіги email, посилань газети, контактних заголовків і згадок <code>ogo.ua/gazeta</code>, а не лише HTML-посилання. Попередні правила контактних блоків та email збережені. Поле anons не змінює. Складну або пошкоджену розмітку залишає для перевірки; матеріали з такими збігами не очищає масово. У рядках звіту видно зняття посилань і видалення абзаців окремо.</p>
         <?php elseif ($project==='editorial_urls'): ?>
         <p>Замінює старі рубрики за погодженою редакцією картою: рецепти газети, підсумки року, рейтинги, оборона, Волинь, Європа, Євро-2012, довідка, один день, політика, нові обличчя, вибори, бізнес, агровиробники, гороскоп, влада й рукоділля. Змінює лише href, зберігаючи текст, оформлення та інші атрибути.</p>
         <p>Старі рейтингові рубрики з токеном <code>top</code> (також <code>top20</code>) або <code>influence</code> у назві ведуть на <code>https://ogo.ua/tag/rejtyngy/</code>. Це правило діє лише для рубрик головного сайту; активна <code>/rubrics/view/top/</code> не змінюється. Для <code>ogo20</code> є окремий точний відповідник.</p>
@@ -228,41 +265,46 @@ final class OGO_Media_Cleaner {
         <p>Замінює лише href посилань зі старої рубрики <code>https://ogo.ua/rubrics/view/goroskop</code> на тег <code>https://ogo.ua/tag/goroskop/</code>. Текст посилання (зокрема «ЩОДЕННИЙ ГОРОСКОП»), оформлення та інші атрибути зберігаються.</p>
         <p>Підтримує http, https, www, //, адреси від кореня сайту та кінцевий слеш. Параметри й фрагмент #… зберігаються. Інші рубрики, домени й уже актуальні посилання не змінює. Коментарі та блоки коду пропускає; вкладені й незакриті посилання залишає для перевірки. Матеріали з такими збігами потребують ручної перевірки.</p>
         <?php elseif ($project==='legacy_missing'): ?>
-        <p>Спочатку перевіряє старі адреси /articles/ за однозначним ID у WordPress. Наявні публічні статті отримують актуальний URL. Якщо запису немає в базі, знімає теги a всередині речення, зберігаючи текст і форматування. Окремий абзац чи рядок, що містить лише одне таке текстове посилання, видаляє разом з простими обгортками p, div, span, font, strong та кінцевим br.</p>
-        <p>Не використовує HTTP 404 як доказ відсутності статті. Чернетки, кошик, захищені записи, інші типи записів, неоднозначні ID, складний або пошкоджений HTML — ручна перевірка. /archive/…/site/… також завжди вручну: ID цього архіву може вести на іншу статтю. Автоматичного пошуку за заголовком і вибору схожої статті немає.</p>
-        <p>Якщо в матеріалі є хоча б один необроблений збіг, масове очищення його пропускає. У журналі окремо вказано заміни URL, зняті посилання й видалені блоки. Перед застосуванням повторно перевіряє наявність статей; доступні «Було → стане» та відкат.</p>
+        <p>Знімає лише теги <code>&lt;a&gt;</code> з архівних адрес <code>/archive/дата/розділ/число</code> та <code>/rubrics/рубрика/дата/число</code>. Текст, оформлення й абзаци зберігаються. Числа з цих адрес не використовуються для пошуку статей; активні <code>/rubrics/view/…</code> пропускаються.</p>
+        <p>Для старих адрес <code>/articles/…</code> перевіряє ID у WordPress. Доступна публічна стаття отримує актуальний URL. Якщо запису немає, знімає лише теги посилання. Не використовує HTTP 404 як доказ відсутності. Закриті записи, неоднозначні адреси й пошкоджений HTML потребують ручної перевірки.</p>
+        <?php elseif ($project==='segodnya'): ?>
+        <p>Знімає лише теги <code>&lt;a&gt;</code> з посилань на <code>segodnya.ua</code> та піддомени. Текст, оформлення й абзаци зберігаються.</p>
+        <?php elseif ($tsn_mode): ?>
+        <p>Встановлює <code>target="_blank"</code> і додає <code>nofollow noopener</code> до <code>rel</code> посилань на <code>tsn.ua</code> та піддомени. Інші значення <code>rel</code>, URL і текст посилання зберігаються.</p>
         <?php elseif ($project==='legacy_urls'): ?>
         <p>Визначає ID зі старих адрес <code>/articles/view/…</code> та <code>/articles/дата/ID…</code>. Підтримує .html, .htm, відсутнє розширення, крапку після адреси, зайвий br наприкінці та вкладені/склеєні URL з одним і тим самим ID. Домени джерел: ogo.ua, mail.ogo.ua, gazeta.ogo.ua (також www, http, https, // та адреси від кореня). Запити до цих старих адрес не виконуються.</p>
         <p>Заміна відбувається лише за однозначним ID, коли WordPress знаходить доступну опубліковану статтю без пароля й повертає актуальний permalink. ID важливіший за помилкову дату в старому URL. Різні ID в одній адресі, невідомі суфікси, параметри URL, відсутні й закриті статті залишаються для перевірки з поясненням. Якщо матеріал має необроблені збіги, він не потрапляє до готових для масової заміни.</p>
         <p>Змінює лише href, зберігає текст, оформлення та інші атрибути. Прибирає #page-top; інші якорі зберігає. Перед застосуванням повторно перевіряє актуальність адрес і доступність статей. Нічого автоматично не видаляє; доступні попередній перегляд, журнал і відкат.</p>
-        <?php elseif ($project==='dossier_urls'): ?>
-        <p>Змінює лише href старих посилань на досьє ОГО <code>/dossier/...</code>, <code>ogo.ua/dossier/...</code> та <code>ogo.rv.ua/dossier/...</code> на підтверджені сторінки Рівнян <code>https://my.rv.ua/dossier-details/...</code>. Текст посилання, оформлення, абзаци й інший контент не змінює.</p>
-        <p>Відповідники взяті зі списку Product Showcase Рівнян та доповнені підтвердженими редакцією точними парами URL. Посилання без однозначного відповідника залишає в ручній перевірці; якщо в одному матеріалі є і готові, і невпізнані dossier-посилання, матеріал також не потрапляє в масове «готове» очищення без перегляду.</p>
         <?php elseif ($replacing): ?>
         <p>Змінює лише href посилань <code>day.ogo.ua/articles/view/…</code> на <code>https://ogo.ua/articles/view/…</code>. Текст, оформлення, шлях, параметри й фрагмент залишаються. Інші URL не замінює. Модуль не перевіряє, чи існує перенесена стаття.</p>
         <?php elseif ($project==='day'): ?>
         <p>Видаляє окремі текстові рекомендації, «За матеріалами…» та впізнані запрошення «Продовження читайте/переглядайте на сайті…» з посиланнями <code>day.ogo.ua</code>. У змістовних реченнях знімає тільки теги a, зберігаючи текст та оформлення. Підтримує числові й текстові назви .html, жирний текст і переноси всередині посилань. Вкладені посилання видаляє лише у цілому впізнаному фрагменті, якщо всі вони належать старому проєкту. Адреси <code>/articles/view/…</code> виправляйте через окрему заміну URL. Матеріали з необробленими посиланнями залишаються для ручної перевірки.</p>
-        <?php elseif ($project==='media'): ?>
-        <p>Видаляє окремі посилання на media.ogo.ua / www.media.ogo.ua та впізнані запрошення переглянути матеріали: «Більше фото … — у фотогалереї», «Більше робіт — у медіагалереї», «Переглянути відео можна …», «Відео з … — у відеогалереї», «Відео найцікавіших моментів …», «Автогол … дивіться …», «Для тих, хто із творчістю … ще не знайомий — пропонуємо переглянути один з відеокліпів гурту», «Більше фотографій можна побачити в нашій галереї» (включно з наведеними описками), «Усі конкурсні фото зібрані тут — URL», «ВІДЕО: посилання на відеогалерею».</p>
-        <p>Видаляє весь окремий абзац або впізнаний окремий рядок разом із текстом запрошення. Для нових шаблонів потрібне одне посилання на відповідну фото-/відеогалерею без іншого тексту після нього. Звичайні речення, додаткові посилання, зображення та складні блоки залишає для перевірки.</p>
-        <?php else: ?>
-        <p>Видаляє окремі текстові посилання на <code><?php echo esc_html(implode(', ',$projects[$project]['hosts'])); ?></code> разом із текстом та порожнім абзацом. Інший текст, зображення, відео та складні блоки залишає для ручної перевірки.</p>
         <?php endif; ?>
+        <?php if (!$archived): ?>
         <p>Область: post_content типів <code><?php echo esc_html(implode(', ',self::post_types())); ?></code>, включно з чернетками та запланованими. Меню, віджети, метаполя й файли не змінює. Сканування нічого не змінює.</p>
-        <p><button class="button button-primary" data-mode="start">Нове сканування</button> <button class="button" data-mode="scan">Продовжити сканування</button> <button class="button" id="ogo-stop">Зупинити після поточної порції</button></p>
-        <p id="ogo-progress" role="status" aria-live="polite">Перевірено матеріалів: <?php echo esc_html($s['scanned']??0); ?>. <?php echo !empty($s['complete'])?'Сканування завершено.':'Сканування не завершено.'; ?></p>
+        <p><button class="button button-primary" data-mode="start">Нове сканування</button> <button class="button" data-mode="scan">Продовжити сканування</button></p>
         <label><input type="checkbox" id="ogo-backup"> Я маю актуальну резервну копію бази даних.</label>
-        <p><button class="button" data-mode="apply" data-selected="1"><?php echo $vk_mode?'Обробити вибрані':($unwrapping?'Зняти вибрані посилання':($replacing?'Замінити вибрані URL':'Очистити вибрані')); ?></button> <button class="button" data-mode="apply"><?php echo $vk_mode?'Обробити всі готові':($unwrapping?'Зняти всі готові посилання':($replacing?'Замінити всі готові URL':'Очистити всі готові')); ?></button> <button class="button" data-mode="restore" data-selected="1">Відкотити вибрані</button> <button class="button" data-mode="restore">Відкотити показаний запуск</button></p>
-        <p>Очищення працює для останнього сканування вибраного проєкту. Відкат — для запуску, вибраного у звіті. Старі журнали зберігаються навіть після вимкнення/видалення модуля. Зміни виконуються порціями до 20 матеріалів; відкат не перезаписує відредагований контент.</p>
+        <?php endif; ?>
+        <p>
+            <?php if (!$archived): ?>
+            <button class="button" data-mode="apply" data-selected="1"><?php echo esc_html($apply_selected); ?></button>
+            <button class="button" data-mode="apply"><?php echo esc_html($apply_all); ?></button>
+            <?php endif; ?>
+            <button class="button" data-mode="restore" data-selected="1">Відкотити вибрані</button>
+            <button class="button" data-mode="restore">Відкотити показаний запуск</button>
+            <button class="button" id="ogo-stop">Зупинити після поточної порції</button>
+        </p>
+        <p id="ogo-progress" role="status" aria-live="polite"><?php if (!$archived): ?>Перевірено матеріалів: <?php echo esc_html($s['scanned']??0); ?>. <?php echo !empty($s['complete'])?'Сканування завершено.':'Сканування не завершено.'; ?><?php endif; ?></p>
+        <p>Відкат працює для запуску, вибраного у звіті. Зміни виконуються порціями до 20 матеріалів. Відкат пропускає матеріали з подальшими правками.</p>
         <p><strong>Після очищення/відкату очистіть кеш сайту та CDN, якщо вони використовуються.</strong> Модуль скидає кеш записів WordPress; сторонній кеш може зберігати стару сторінку.</p>
         <h2>Звіт і журнал</h2>
         <?php foreach (self::stats($run,$project) as $st) echo '<p>'.esc_html(($labels[$st['status']]??$st['status']).': '.$st['materials'].' матеріалів; '.$count_label.': '.$st['links'].'; для перевірки: '.$st['review']).'</p>'; ?>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><input type="hidden" name="project" value="<?php echo esc_attr($project); ?>"><label>Запуск <select name="run"><?php foreach(array_unique(array_merge(array($s['run']??''),$runs)) as $r) { if (!$r) continue; echo '<option value="'.esc_attr($r).'" '.selected($run,$r,false).'>'.esc_html($r).'</option>'; } ?></select></label> <button class="button">Показати</button></form>
         <table class="widefat striped"><thead><tr><th>Вибір</th><th>Матеріал</th><th>Стан</th><th>Попередній перегляд</th></tr></thead><tbody>
         <?php foreach($rows as $r): ?><tr>
-        <td><?php if (($r->status==='done' || ($run===($s['run']??'') && $r->status==='ready'))): ?><input type="checkbox" class="ogo-row" value="<?php echo (int)$r->id; ?>"><?php endif; ?></td>
+        <td><?php if ($r->status==='done' || (!$archived && $run===($s['run']??'') && $r->status==='ready')): ?><input type="checkbox" class="ogo-row" value="<?php echo (int)$r->id; ?>"><?php endif; ?></td>
         <td><a href="<?php echo esc_url(get_edit_post_link($r->post_id)); ?>"><?php echo esc_html(get_the_title($r->post_id)?:'Без назви'); ?></a><br>ID <?php echo (int)$r->post_id; ?></td>
-        <td><?php echo esc_html($labels[$r->status]??$r->status); ?><br><?php echo $ustream_mode?'Видалити елементів: ':(($vk_mode || $project==='day')?'Обробити: ':($project==='gazeta'?'Обробити збігів: ':($unwrapping?'Зняти: ':($replacing?'Замінити: ':'Видалити: ')))); ?><?php echo (int)$r->removed; ?><br>Перевірити: <?php echo (int)$r->review; ?><p><?php echo esc_html($r->message); ?></p></td>
+        <td><?php echo esc_html($labels[$r->status]??$r->status); ?><br><?php echo esc_html($row_action); ?>: <?php echo (int)$r->removed; ?><br>Перевірити: <?php echo (int)$r->review; ?><p><?php echo esc_html($r->message); ?></p></td>
         <td><details><summary>Було → стане (HTML)</summary><p>Оригінал</p><textarea readonly style="width:100%;height:180px"><?php echo esc_textarea($r->before_content); ?></textarea><p>Після очищення</p><textarea readonly style="width:100%;height:180px"><?php echo esc_textarea($r->after_content); ?></textarea></details></td>
         </tr><?php endforeach; ?></tbody></table>
         <p><?php if($page>1) echo '<a class="button" href="'.esc_url(add_query_arg(array('paged'=>$page-1))).'">Назад</a> '; if(count($rows)===20) echo '<a class="button" href="'.esc_url(add_query_arg(array('paged'=>$page+1))).'">Далі</a>'; ?></p>
