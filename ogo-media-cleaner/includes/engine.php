@@ -13,6 +13,7 @@ final class OGO_MC_Engine {
             'miralinks_unwrap' => array('label'=>'Міралінкс — очищення за ревізією', 'hosts'=>array(), 'photo_callouts'=>false),
             'site_links' => array('label'=>'Зовнішні посилання — аудит сайту', 'hosts'=>array(), 'photo_callouts'=>false),
             'source_batch_1' => array('label'=>'Зовнішні посилання — перша партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes'),
+            'telegram_urls' => array('label'=>'Зовнішні посилання: Телеграм', 'hosts'=>array('t.me'), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'audit' => array('label'=>'Ревізія старих посилань', 'hosts'=>array('ogo.ua','ogo.rv.ua'), 'photo_callouts'=>false),
             'coverage_404' => array('label'=>'Не знайдено (404)', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'media' => array('label'=>'Медіа', 'hosts'=>array('media.ogo.ua','www.media.ogo.ua'), 'photo_callouts'=>true),
@@ -280,6 +281,7 @@ final class OGO_MC_Engine {
         if (isset($config['link_action'])) {
             require_once __DIR__.'/source-links.php';
             if ($project==='source_batch_1') return OGO_MC_Source_Links::first_batch($content);
+            if ($project==='telegram_urls') return OGO_MC_Source_Links::telegram($content);
             return OGO_MC_Source_Links::analyze($content,$config['hosts'][0],$config['link_action']==='attributes');
         }
         if (in_array($project,array('audit','external_audit','coverage_404','site_links'),true)) throw new InvalidArgumentException('Use the read-only audit engine');

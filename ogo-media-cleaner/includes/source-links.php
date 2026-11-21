@@ -118,12 +118,42 @@ final class OGO_MC_Source_Links {
         return $result;
     }
 
-    private static function edit_links($content,$matches,$update_attributes,$protect_embeds=false,$verify=null) {
+    public static function telegram($content) {
+        if (stripos($content,'t.me')===false && stripos($content,'telegram')===false && strpos($content,'&#')===false) {
+            return array('after'=>$content,'total'=>0,'removed'=>0,'review'=>0,'fragments'=>array(),'summary'=>'');
+        }
+        require_once __DIR__.'/external-engine.php';
+        require_once __DIR__.'/site-links-engine.php';
+        require_once __DIR__.'/telegram-links.php';
+        list($tokens,$embeds)=OGO_MC_Telegram_Links::inspect($content);
+        $paid=OGO_MC_Site_Links_Engine::ad_marker($content);
+        $result=self::edit_links($content,function($tag) use ($paid) {
+            if ($paid) return false;
+            $href=OGO_MC_Engine::href_info($tag);
+            $link=$href?OGO_MC_External_Engine::classify($href['raw']):null;
+            if (!$link || $link['kind']==='review' || OGO_MC_Site_Links_Engine::domain($link['domain'])!=='t.me') return false;
+            $attributes=OGO_MC_External_Engine::link_attributes($tag);
+            return !OGO_MC_Site_Links_Engine::is_closed(explode(' ',$attributes['rel']));
+        },true,true,null,$tokens);
+        $result['blocking_review']=$result['review'];
+        $result['total']+=$embeds;
+        $result['review']+=$embeds;
+        if ($embeds) $result['summary'].=' Вставки Telegram для ручної перевірки: '.$embeds.'.';
+        return $result;
+    }
+
+    private static function edit_links($content,$matches,$update_attributes,$protect_embeds=false,$verify=null,$tokens=null) {
         $stack=array();
         $edits=array();
         $changed=0;
         $review=0;
-        foreach (OGO_MC_Engine::html_tokens($content,$protect_embeds) as list($tag,$offset)) {
+        foreach ($tokens??OGO_MC_Engine::html_tokens($content,$protect_embeds) as $token) {
+            list($tag,$offset)=$token;
+            if (!empty($token[2])) {
+                foreach ($stack as &$open) $open['target']=false;
+                unset($open);
+                continue;
+            }
             if (preg_match('~^<a(?=[\s/>])~i',$tag)) {
                 $target=$matches($tag);
                 $nested=!empty($stack);

@@ -8,6 +8,7 @@
     tsn: "Оновити target і rel посилань на tsn.ua та піддомени згідно з попереднім переглядом?",
     korrespondent: "Оновити target і rel посилань на korrespondent.net та піддомени згідно з попереднім переглядом?",
     source_batch_1: "Оновити target і rel посилань першої партії згідно з попереднім переглядом?",
+    telegram_urls: "Закрити звичайні посилання на t.me згідно з попереднім переглядом?",
     editorial_urls: "Замінити погоджені рубрики на теги за картою, включно зі старими рейтингами; зберегти активну рубрику top, текст і оформлення?",
     vybir_home: "Замінити посилання на головну «Вибір 2010» на тег «Рейтинги» згідно з попереднім переглядом?",
     woman_urls: "Замінити посилання Жіночого клубу: головну /woman на тег zhinochyj-klub, 8 рубрик на погоджені теги, статті на URL за ID; зберегти текст та оформлення?",
@@ -74,6 +75,7 @@
       progress.textContent += ' Операцію завершено. Оновлення звіту…';
       const query=new URLSearchParams({page:'ogo-media-cleaner',project:ogoMC.project});
       if(mode==='restore') query.set('run',ogoMC.run);
+      if(ogoMC.reviewOnly) query.set('review','1');
       window.location.assign(window.location.pathname+'?'+query.toString());
     } catch(e) { progress.textContent='Зупинено: '+e.message+' Оновіть сторінку для актуального журналу. Не запускайте очищення повторно, доки не перевірите звіт.'; }
     finally { busy=false; document.querySelectorAll('[data-mode]').forEach(b=>b.disabled=false); }
