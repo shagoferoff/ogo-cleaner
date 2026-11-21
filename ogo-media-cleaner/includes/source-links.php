@@ -14,6 +14,20 @@ final class OGO_MC_Source_Links {
         'espreso.tv'=>false, 'life.pravda.com.ua'=>false, 'rtb.rv.ua'=>false,
         'zik.com.ua'=>false, 'docs.google.com'=>false, '5.ua'=>false, '7d.rv.ua'=>false,
     );
+    private const SECOND_BATCH=array(
+        'diloverivne.com'=>false, 'dramteatr.com.ua'=>false, 'erve.ua'=>false,
+        'opora.rv.ua'=>false, 'suspilne.media'=>false, 'dt.ua'=>false,
+        'rivne-cerkva.rv.ua'=>false, 'zdolbunivcity.net'=>false, 'hh.ua'=>false,
+        'rcwa.com.ua'=>false, 'delo.ua'=>false, 'volynnews.com'=>false,
+        'automoto.ua'=>false, 'goo.gl'=>false, 'kommersant.ua'=>false,
+        'uk.wikipedia.org'=>false, 'send.monobank.ua'=>false, 'cgm.rv.ua'=>false,
+        'nbnews.com.ua'=>false, 'vesti.ua'=>false, 'zdolbuniv.com'=>false,
+        'podrobnosti.ua'=>false, 'censor.net.ua'=>false, 'prosport.tsn.ua'=>true,
+        'uz.gov.ua'=>false, 'volynpost.com'=>false, 'city-adm.rv.ua'=>false,
+        'visnyk.lutsk.ua'=>false, 'kasa.in.ua'=>false, 'khomko.rv.ua'=>false,
+        'kmu.gov.ua'=>false, 'meteo.gov.ua'=>false, 'roe.vsei.ua'=>false,
+        'takeinfo.net'=>false, 'vse.rv.ua'=>false, 'forms.gle'=>true,
+    );
     private static function matches_host($tag,$domain) {
         $info=OGO_MC_Engine::href_info($tag);
         $parts=$info['parts']??null;
@@ -74,21 +88,22 @@ final class OGO_MC_Source_Links {
         return self::edit_links($content,function($tag) use ($domain){return self::matches_host($tag,$domain);},$update_attributes);
     }
 
-    public static function first_batch($content) {
+    public static function batch($content,$batch) {
         require_once __DIR__.'/external-engine.php';
         require_once __DIR__.'/site-links-engine.php';
         if (stripos($content,'<a')===false || OGO_MC_Site_Links_Engine::ad_marker($content)) {
             return array('after'=>$content,'total'=>0,'removed'=>0,'review'=>0,'fragments'=>array(),'summary'=>'');
         }
-        return self::edit_links($content,function($tag) {
+        $domains=$batch===2?self::SECOND_BATCH:self::FIRST_BATCH;
+        return self::edit_links($content,function($tag) use ($domains) {
             $href=OGO_MC_Engine::href_info($tag);
             $link=$href?OGO_MC_External_Engine::classify($href['raw']):null;
             if (!$link || $link['kind']==='review') return false;
             $domain=OGO_MC_Site_Links_Engine::domain($link['domain']);
-            if (!array_key_exists($domain,self::FIRST_BATCH)) return false;
+            if (!array_key_exists($domain,$domains)) return false;
             $attributes=OGO_MC_External_Engine::link_attributes($tag);
             $rel=explode(' ',$attributes['rel']);
-            return !in_array('sponsored',$rel,true) && OGO_MC_Site_Links_Engine::is_closed($rel)===self::FIRST_BATCH[$domain];
+            return !in_array('sponsored',$rel,true) && OGO_MC_Site_Links_Engine::is_closed($rel)===$domains[$domain];
         },true,true);
     }
 

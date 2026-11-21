@@ -12,7 +12,8 @@ final class OGO_MC_Engine {
             'external_audit' => array('label'=>'Міралінкс — ревізія зовнішніх посилань', 'hosts'=>array(), 'photo_callouts'=>false),
             'miralinks_unwrap' => array('label'=>'Міралінкс — очищення за ревізією', 'hosts'=>array(), 'photo_callouts'=>false),
             'site_links' => array('label'=>'Зовнішні посилання — аудит сайту', 'hosts'=>array(), 'photo_callouts'=>false),
-            'source_batch_1' => array('label'=>'Зовнішні посилання — перша партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes'),
+            'source_batch_1' => array('label'=>'Зовнішні посилання — перша партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes', 'source_batch'=>1),
+            'source_batch_2' => array('label'=>'Зовнішні посилання — друга партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes', 'source_batch'=>2),
             'telegram_urls' => array('label'=>'Зовнішні посилання: Телеграм', 'hosts'=>array('t.me'), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'facebook_urls' => array('label'=>'Зовнішні посилання: Facebook', 'hosts'=>array('facebook.com'), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'audit' => array('label'=>'Ревізія старих посилань', 'hosts'=>array('ogo.ua','ogo.rv.ua'), 'photo_callouts'=>false),
@@ -281,7 +282,7 @@ final class OGO_MC_Engine {
         if ($config===null) throw new InvalidArgumentException('Unknown cleanup project');
         if (isset($config['link_action'])) {
             require_once __DIR__.'/source-links.php';
-            if ($project==='source_batch_1') return OGO_MC_Source_Links::first_batch($content);
+            if (isset($config['source_batch'])) return OGO_MC_Source_Links::batch($content,$config['source_batch']);
             if ($project==='telegram_urls') return OGO_MC_Source_Links::social($content,'telegram','t.me');
             if ($project==='facebook_urls') return OGO_MC_Source_Links::social($content,'facebook','facebook.com');
             return OGO_MC_Source_Links::analyze($content,$config['hosts'][0],$config['link_action']==='attributes');

@@ -9,7 +9,8 @@ wp_set_current_user(get_user_by('login','audit_admin')->ID);
 class OGO_Batch_Test_Exit extends RuntimeException {}
 add_filter('wp_die_ajax_handler',function(){return function(){throw new OGO_Batch_Test_Exit();};});
 function batch_ajax($mode,$run='',$selection=array()) {
-    $_POST=array('mode'=>$mode,'run'=>$run,'project'=>'source_batch_1','backup'=>'1','nonce'=>wp_create_nonce('ogo_mc'));
+    global $batch_project;
+    $_POST=array('mode'=>$mode,'run'=>$run,'project'=>$batch_project,'backup'=>'1','nonce'=>wp_create_nonce('ogo_mc'));
     if ($selection) { $_POST['selected']='1'; $_POST['ids']=$selection; }
     $_REQUEST=$_POST;
     ob_start();
@@ -25,7 +26,9 @@ function batch_fixture($html,$status='publish',$type='post') {
 function batch_assert($ok,$message) {
     if (!$ok) throw new RuntimeException($message);
 }
-$source='<p><a href="https://pravda.com.ua/test" rel="noreferrer">Джерело</a> <a href="https://t.me/channel/1">Telegram</a> <a href="https://facebook.com/video/2">Facebook</a></p>';
+$batch_project=getenv('OGO_TEST_SOURCE_BATCH')==='2'?'source_batch_2':'source_batch_1';
+$host=$batch_project==='source_batch_2'?'suspilne.media':'pravda.com.ua';
+$source='<p><a href="https://'.$host.'/test" rel="noreferrer">Джерело</a> <a href="https://t.me/channel/1">Telegram</a> <a href="https://facebook.com/video/2">Facebook</a></p>';
 $expected=str_replace('rel="noreferrer"','rel="nofollow noopener noreferrer" target="_blank"',$source);
 $paid=$source.'<p>На правах реклами.</p>';
 $article=batch_fixture($source);
@@ -50,4 +53,4 @@ try {
 } finally {
     foreach (array($article,$draft,$page,$advert) as $id) wp_delete_post($id,true);
 }
-echo "Passed WordPress first batch preview, published scope, advertising exclusion, apply and rollback checks.\n";
+echo "Passed WordPress $batch_project preview, published scope, advertising exclusion, apply and rollback checks.\n";

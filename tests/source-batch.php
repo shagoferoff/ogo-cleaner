@@ -1,12 +1,12 @@
 <?php
 require_once __DIR__.'/../ogo-media-cleaner/includes/engine.php';
 
-function batch_check($before,$after,$updated,$review=0) {
-    $r=OGO_MC_Engine::analyze($before,'source_batch_1');
+function batch_check($before,$after,$updated,$review=0,$project='source_batch_1') {
+    $r=OGO_MC_Engine::analyze($before,$project);
     if ($r['after']!==$after || $r['removed']!==$updated || $r['review']!==$review || $r['total']!==$updated+$review) {
         throw new RuntimeException('Unexpected batch preview: '.var_export($r,true));
     }
-    if (OGO_MC_Engine::analyze($after,'source_batch_1')['removed']!==0) throw new RuntimeException('Second scan changes already processed links');
+    if (OGO_MC_Engine::analyze($after,$project)['removed']!==0) throw new RuntimeException('Second scan changes already processed links');
 }
 $open=array(
     'pogoda.rovno.ua','pravda.com.ua','unn.com.ua','moemisto.ua','rivne1.tv','ukrinform.ua',
@@ -50,3 +50,43 @@ batch_check($wrapper,$wrapper,0);
 $unclosed='<a href="https://www.pravda.com.ua/story">Незакрите';
 batch_check($unclosed,$unclosed,0,1);
 echo "Passed first-batch domain list, advertising, rel status, embedded markup and repeat-run checks.\n";
+
+$project='source_batch_2';
+$second_open=array(
+    'diloverivne.com','dramteatr.com.ua','erve.ua','opora.rv.ua','suspilne.media','dt.ua',
+    'rivne-cerkva.rv.ua','zdolbunivcity.net','hh.ua','rcwa.com.ua','delo.ua','volynnews.com',
+    'automoto.ua','goo.gl','kommersant.ua','uk.wikipedia.org','send.monobank.ua','cgm.rv.ua',
+    'nbnews.com.ua','vesti.ua','zdolbuniv.com','podrobnosti.ua','censor.net.ua','uz.gov.ua',
+    'volynpost.com','city-adm.rv.ua','visnyk.lutsk.ua','kasa.in.ua','khomko.rv.ua','kmu.gov.ua',
+    'meteo.gov.ua','roe.vsei.ua','takeinfo.net','vse.rv.ua',
+);
+foreach ($second_open as $host) {
+    $tag='<a href="https://'.$host.'/x">Джерело</a>';
+    batch_check($tag,str_replace('">','" target="_blank" rel="nofollow noopener">',$tag),1,0,$project);
+    $closed_tag='<a href="https://'.$host.'/x" rel="nofollow">Джерело</a>';
+    batch_check($closed_tag,$closed_tag,0,0,$project);
+}
+foreach (array('prosport.tsn.ua','forms.gle') as $host) {
+    $tag='<a href="https://'.$host.'/x">Джерело</a>';
+    batch_check($tag,$tag,0,0,$project);
+    $closed_tag='<a href="https://'.$host.'/x" rel="ugc noreferrer">Джерело</a>';
+    batch_check($closed_tag,'<a href="https://'.$host.'/x" rel="nofollow noopener ugc noreferrer" target="_blank">Джерело</a>',1,0,$project);
+    $sponsored='<a href="https://'.$host.'/x" rel="sponsored">Реклама</a>';
+    batch_check($sponsored,$sponsored,0,0,$project);
+}
+$ready='<a href="//www.send.monobank.ua/x?y=1&amp;z=2" rel="noreferrer" target="_self"><b>Джерело</b></a>';
+$expected=str_replace(array('rel="noreferrer"','target="_self"'),array('rel="nofollow noopener noreferrer"','target="_blank"'),$ready);
+batch_check($ready,$expected,1,0,$project);
+$protected='<!-- '.$ready.' --><code>'.$ready.'</code><iframe src="https://example.org/embed">'.$ready.'</iframe>'
+    .'<!-- wp:embed {"url":"https://send.monobank.ua/x"} --><figure>'.$ready.'</figure><!-- /wp:embed -->';
+batch_check($protected.$ready,$protected.$expected,1,0,$project);
+$paid=$ready.'<p>На правах реклами.</p>';
+batch_check($paid,$paid,0,0,$project);
+foreach (array('pravda.com.ua','tsn.ua','monobank.ua','en.wikipedia.org','other.forms.gle','send.monobank.ua.example.org') as $host) {
+    $tag='<a href="https://'.$host.'/x" rel="ugc">Джерело</a><a href="https://'.$host.'/y">Джерело</a>';
+    batch_check($tag,$tag,0,0,$project);
+}
+$overlap='<a href="https://suspilne.media/x" rel="nofollow">Закрите</a>';
+batch_check($overlap,$overlap,0,0,$project);
+batch_check($overlap,'<a href="https://suspilne.media/x" rel="nofollow noopener" target="_blank">Закрите</a>',1);
+echo "Passed second-batch domain list, audit status, advertising, embed protection and repeat-run checks.\n";

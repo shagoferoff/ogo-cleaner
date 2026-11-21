@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.41.0
+ * Version: 1.42.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -15,11 +15,14 @@ require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 require_once __DIR__ . '/includes/site-links.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.41.0';
+    public const VERSION = '1.42.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types($project='') {
-        return in_array($project,array('source_batch_1','telegram_urls','facebook_urls','miralinks_unwrap'),true)?array('post'):array('post','page','rivnenschina','dovidka','phogo','press');
+        return (self::published_posts_only($project) || $project==='miralinks_unwrap')?array('post'):array('post','page','rivnenschina','dovidka','phogo','press');
+    }
+    private static function published_posts_only($project) {
+        return isset(OGO_MC_Engine::projects()[$project]['source_batch']) || in_array($project,array('telegram_urls','facebook_urls'),true);
     }
     private static function post_type_placeholders($project='') { return implode(',', array_fill(0, count(self::post_types($project)), '%s')); }
     public static function activate() {
@@ -129,7 +132,7 @@ final class OGO_Media_Cleaner {
             }
             if (!$s['complete']) {
                 $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home','flash'),true);
-                $site_batch=in_array($project,array('source_batch_1','telegram_urls','facebook_urls'),true);
+                $site_batch=self::published_posts_only($project);
                 $statuses=$site_batch?"'publish'":"'publish','private','draft','pending','future'";
                 $limit=$site_batch?200:50;
                 $posts=$miralinks?OGO_MC_External::cleanup_posts($s['audit_run'],$s['cursor'],$s['max'],$limit):$wpdb->get_results($wpdb->prepare(
@@ -326,6 +329,9 @@ final class OGO_Media_Cleaner {
         <?php elseif ($project==='source_batch_1'): ?>
         <p>У 31 погодженого домену додає <code>target="_blank"</code> і <code>nofollow noopener</code> для посилань у тих самих категоріях, що й у надісланих рядках ревізії. Для <code>roe.vsei.ua</code> і <code>suspilne.media</code> обробляє лише вже закриті посилання. Враховує точний домен і його варіант з <code>www</code>.</p>
         <p>Telegram, Facebook, вбудовані матеріали та посилання з виявленими ознаками реклами пропускає. URL, анкор та інші значення <code>rel</code> зберігаються.</p>
+        <?php elseif ($project==='source_batch_2'): ?>
+        <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до відкритих посилань із другої партії ревізії. Для <code>prosport.tsn.ua</code> і <code>forms.gle</code> оновлює атрибути вже закритих посилань. Враховує точний домен і варіант із <code>www</code>.</p>
+        <p>Вбудовані матеріали й посилання з виявленими ознаками реклами пропускає. URL, анкор та інші значення <code>rel</code> зберігаються.</p>
         <?php elseif ($social_mode): ?>
         <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на <code><?php echo esc_html($projects[$project]['hosts'][0]); ?></code> (також із <code>www</code>) у статтях без рекламної позначки. Вбудовані пости й відео позначає для ручної перевірки. Звичайні посилання в тій самій статті можна оновити окремо від вставки.</p>
         <?php elseif ($updating_attributes): ?>
@@ -340,7 +346,7 @@ final class OGO_Media_Cleaner {
         <p>Видаляє окремі текстові рекомендації, «За матеріалами…» та впізнані запрошення «Продовження читайте/переглядайте на сайті…» з посиланнями <code>day.ogo.ua</code>. У змістовних реченнях знімає тільки теги a, зберігаючи текст та оформлення. Підтримує числові й текстові назви .html, жирний текст і переноси всередині посилань. Вкладені посилання видаляє лише у цілому впізнаному фрагменті, якщо всі вони належать старому проєкту. Адреси <code>/articles/view/…</code> виправляйте через окрему заміну URL. Матеріали з необробленими посиланнями залишаються для ручної перевірки.</p>
         <?php endif; ?>
         <?php if (!$archived): ?>
-        <?php if ($project==='source_batch_1' || $social_mode || $miralinks): ?>
+        <?php if (self::published_posts_only($project) || $miralinks): ?>
         <p>Область — текст опублікованих статей. Під час сканування створюється попередній перегляд.</p>
         <?php else: ?>
         <p>Область: post_content типів <code><?php echo esc_html(implode(', ',self::post_types())); ?></code>, включно з чернетками та запланованими. Меню, віджети, метаполя й файли не змінює. Сканування нічого не змінює.</p>
