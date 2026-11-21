@@ -11,6 +11,7 @@ final class OGO_MC_Engine {
         return array(
             'external_audit' => array('label'=>'Міралінкс — ревізія зовнішніх посилань', 'hosts'=>array(), 'photo_callouts'=>false),
             'site_links' => array('label'=>'Зовнішні посилання — аудит сайту', 'hosts'=>array(), 'photo_callouts'=>false),
+            'source_batch_1' => array('label'=>'Зовнішні посилання — перша партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'audit' => array('label'=>'Ревізія старих посилань', 'hosts'=>array('ogo.ua','ogo.rv.ua'), 'photo_callouts'=>false),
             'coverage_404' => array('label'=>'Не знайдено (404)', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'media' => array('label'=>'Медіа', 'hosts'=>array('media.ogo.ua','www.media.ogo.ua'), 'photo_callouts'=>true),
@@ -47,8 +48,10 @@ final class OGO_MC_Engine {
         preg_match_all('~([^\s=<>/]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+)))?~', substr($m[0], strlen($name)+1, -1), $attrs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL);
         return $attrs;
     }
-    public static function html_tokens($content) {
-        $opaque='<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|pre|code)(?=[\s/>])(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\1\s*>|$)';
+    public static function html_tokens($content,$protect_embeds=false) {
+        $embedded=$protect_embeds?'iframe|object|video|audio|template|':'';
+        $block=$protect_embeds?'\[embed(?:\s[^\]]*)?\][\s\S]*?\[/embed\]|<!--\s*wp:(?<embed_block>(?:core/)?embed|core-embed/[a-z0-9-]+)(?=[\s-])(?:(?!-->)[\s\S])*(?<!/)-->[\s\S]*?(?:<!--\s*/wp:\k<embed_block>\s*-->|$)|':'';
+        $opaque=$block.'<!--[\s\S]*?(?:-->|$)|<(?<raw_tag>'.$embedded.'script|style|textarea|pre|code)(?=[\s/>])(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\k<raw_tag>\s*>|$)';
         $tag='<(?:/?[a-z]|[!?])(?:[^<>"\']|"[^"]*"|\'[^\']*\')*>';
         preg_match_all('~'.$opaque.'|'.$tag.'~i',$content,$tokens,PREG_OFFSET_CAPTURE);
         return $tokens[0];
@@ -275,6 +278,7 @@ final class OGO_MC_Engine {
         if ($config===null) throw new InvalidArgumentException('Unknown cleanup project');
         if (isset($config['link_action'])) {
             require_once __DIR__.'/source-links.php';
+            if ($project==='source_batch_1') return OGO_MC_Source_Links::first_batch($content);
             return OGO_MC_Source_Links::analyze($content,$config['hosts'][0],$config['link_action']==='attributes');
         }
         if (in_array($project,array('audit','external_audit','coverage_404','site_links'),true)) throw new InvalidArgumentException('Use the read-only audit engine');

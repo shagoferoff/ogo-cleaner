@@ -1,6 +1,19 @@
 <?php
 /** Edit anchor tags by byte offset, preserving the surrounding article HTML. */
 final class OGO_MC_Source_Links {
+    // The audit groups by exact host (including its www variant) and rel state.
+    private const FIRST_BATCH=array(
+        'pogoda.rovno.ua'=>false, 'pravda.com.ua'=>false, 'unn.com.ua'=>false,
+        'moemisto.ua'=>false, 'rivne1.tv'=>false, 'ukrinform.ua'=>false,
+        'radiosvoboda.org'=>false, 'rivnepost.rv.ua'=>false, 'bit.ly'=>false,
+        '4vlada.com'=>false, 'gazeta.ua'=>false, 'news.liga.net'=>false,
+        'zik.ua'=>false, 'epravda.com.ua'=>false, 'rv.gov.ua'=>false,
+        'slovoidilo.ua'=>false, 'charivne.info'=>false, '24tv.com.ua'=>false,
+        '24tv.ua'=>false, 'prm.ua'=>false, 'zaxid.net'=>false,
+        'roe.vsei.ua'=>true, 'president.gov.ua'=>false, 'suspilne.media'=>true,
+        'espreso.tv'=>false, 'life.pravda.com.ua'=>false, 'rtb.rv.ua'=>false,
+        'zik.com.ua'=>false, 'docs.google.com'=>false, '5.ua'=>false, '7d.rv.ua'=>false,
+    );
     private static function matches_host($tag,$domain) {
         $info=OGO_MC_Engine::href_info($tag);
         $parts=$info['parts']??null;
@@ -58,13 +71,35 @@ final class OGO_MC_Source_Links {
     }
 
     public static function analyze($content,$domain,$update_attributes) {
+        return self::edit_links($content,function($tag) use ($domain){return self::matches_host($tag,$domain);},$update_attributes);
+    }
+
+    public static function first_batch($content) {
+        require_once __DIR__.'/external-engine.php';
+        require_once __DIR__.'/site-links-engine.php';
+        if (stripos($content,'<a')===false || OGO_MC_Site_Links_Engine::ad_marker($content)) {
+            return array('after'=>$content,'total'=>0,'removed'=>0,'review'=>0,'fragments'=>array(),'summary'=>'');
+        }
+        return self::edit_links($content,function($tag) {
+            $href=OGO_MC_Engine::href_info($tag);
+            $link=$href?OGO_MC_External_Engine::classify($href['raw']):null;
+            if (!$link || $link['kind']==='review') return false;
+            $domain=OGO_MC_Site_Links_Engine::domain($link['domain']);
+            if (!array_key_exists($domain,self::FIRST_BATCH)) return false;
+            $attributes=OGO_MC_External_Engine::link_attributes($tag);
+            $rel=explode(' ',$attributes['rel']);
+            return !in_array('sponsored',$rel,true) && OGO_MC_Site_Links_Engine::is_closed($rel)===self::FIRST_BATCH[$domain];
+        },true,true);
+    }
+
+    private static function edit_links($content,$matches,$update_attributes,$protect_embeds=false) {
         $stack=array();
         $edits=array();
         $changed=0;
         $review=0;
-        foreach (OGO_MC_Engine::html_tokens($content) as list($tag,$offset)) {
+        foreach (OGO_MC_Engine::html_tokens($content,$protect_embeds) as list($tag,$offset)) {
             if (preg_match('~^<a(?=[\s/>])~i',$tag)) {
-                $target=self::matches_host($tag,$domain);
+                $target=$matches($tag);
                 $nested=!empty($stack);
                 foreach ($stack as &$open) $open['nested']=true;
                 unset($open);
@@ -86,6 +121,9 @@ final class OGO_MC_Source_Links {
                     $edits[]=array($offset,strlen($tag),'');
                 }
                 ++$changed;
+            } elseif ($protect_embeds && $stack && preg_match('~^<(?:iframe|object|video|audio|template)(?=[\s/>])|^<!--\s*wp:(?:(?:core/)?embed|core-embed/)|^\[embed\b~i',$tag)) {
+                foreach ($stack as &$open) $open['target']=false;
+                unset($open);
             }
         }
         foreach ($stack as $open) if ($open['target']) ++$review;

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.37.0
+ * Version: 1.38.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -15,11 +15,13 @@ require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 require_once __DIR__ . '/includes/site-links.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.37.0';
+    public const VERSION = '1.38.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
-    private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
-    private static function post_type_placeholders() { return implode(',', array_fill(0, count(self::post_types()), '%s')); }
+    private static function post_types($project='') {
+        return $project==='source_batch_1'?array('post'):array('post','page','rivnenschina','dovidka','phogo','press');
+    }
+    private static function post_type_placeholders($project='') { return implode(',', array_fill(0, count(self::post_types($project)), '%s')); }
     public static function activate() {
         global $wpdb;
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -117,21 +119,26 @@ final class OGO_Media_Cleaner {
             if (($s['engine_version']??'')!==self::VERSION) wp_send_json_error('Після оновлення почніть нове сканування цього проєкту.');
             if (!$s['complete']) {
                 $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home','flash'),true);
+                $first_batch=$project==='source_batch_1';
+                $statuses=$first_batch?"'publish'":"'publish','private','draft','pending','future'";
+                $limit=$first_batch?200:50;
                 $posts=$wpdb->get_results($wpdb->prepare(
-                    "SELECT ID,post_content,post_modified_gmt,post_status FROM {$wpdb->posts} WHERE ID>%d AND ID<=%d AND post_type IN (".self::post_type_placeholders().") AND post_status IN ('publish','private','draft','pending','future') ORDER BY ID LIMIT 50",
-                    array_merge(array($s['cursor'],$s['max']),self::post_types())
+                    "SELECT ID,post_content,post_modified_gmt,post_status FROM {$wpdb->posts} WHERE ID>%d AND ID<=%d AND post_type IN (".self::post_type_placeholders($project).") AND post_status IN ($statuses) ORDER BY ID LIMIT %d",
+                    array_merge(array($s['cursor'],$s['max']),self::post_types($project),array($limit))
                 ));
+                if ($wpdb->last_error) wp_send_json_error('Не вдалося прочитати матеріали.');
                 foreach ($posts as $p) {
                     $a=OGO_MC_Engine::analyze($p->post_content,$project);
                     if ($a['total']) {
                         $ready=$a['removed'] && (!$block_on_review || !$a['review']);
-                        $ok=$wpdb->insert($t,array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??''));
+                        $entry=array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??'');
+                        $ok=$first_batch?$wpdb->replace($t,$entry):$wpdb->insert($t,$entry);
                         if (!$ok) wp_send_json_error('Не вдалося записати звіт. Перезапустіть сканування.');
                     }
                     $s['cursor']=(int)$p->ID; ++$s['scanned'];
-                    update_option(self::option_name($project),$s,false);
+                    if (!$first_batch || $a['total']) update_option(self::option_name($project),$s,false);
                 }
-                if (count($posts)<50) $s['complete']=true;
+                if (count($posts)<$limit) $s['complete']=true;
                 update_option(self::option_name($project),$s,false);
             }
         } elseif ($mode==='apply' || $mode==='restore') {
@@ -171,8 +178,8 @@ final class OGO_Media_Cleaner {
         $gmt=current_time('mysql',true); $local=current_time('mysql');
         // Atomic compare-and-swap: never overwrite a concurrent editor's content or status.
         $changed=$wpdb->query($wpdb->prepare(
-            "UPDATE {$wpdb->posts} SET post_content=%s,post_modified=%s,post_modified_gmt=%s WHERE ID=%d AND BINARY post_content=BINARY %s AND post_modified_gmt=%s AND post_status=%s AND post_type IN (".self::post_type_placeholders().")",
-            array_merge(array($after,$local,$gmt,$r->post_id,$before,$expected,$r->post_status),self::post_types())
+            "UPDATE {$wpdb->posts} SET post_content=%s,post_modified=%s,post_modified_gmt=%s WHERE ID=%d AND BINARY post_content=BINARY %s AND post_modified_gmt=%s AND post_status=%s AND post_type IN (".self::post_type_placeholders($r->project).")",
+            array_merge(array($after,$local,$gmt,$r->post_id,$before,$expected,$r->post_status),self::post_types($r->project))
         ));
         if ($changed!==1) {
             $wpdb->update($t,array('status'=>'conflict','message'=>'Матеріал змінився після сканування/очищення, або сталася помилка запису. Не перезаписано.'),array('id'=>$r->id)); return;
@@ -283,6 +290,9 @@ final class OGO_Media_Cleaner {
         <p>Для старих адрес <code>/articles/…</code> перевіряє ID у WordPress. Доступна публічна стаття отримує актуальний URL. Якщо запису немає, знімає лише теги посилання. Не використовує HTTP 404 як доказ відсутності. Закриті записи, неоднозначні адреси й пошкоджений HTML потребують ручної перевірки.</p>
         <?php elseif ($project==='segodnya'): ?>
         <p>Знімає лише теги <code>&lt;a&gt;</code> з посилань на <code>segodnya.ua</code> та піддомени. Текст, оформлення й абзаци зберігаються.</p>
+        <?php elseif ($project==='source_batch_1'): ?>
+        <p>У 31 погодженого домену додає <code>target="_blank"</code> і <code>nofollow noopener</code> для посилань у тих самих категоріях, що й у надісланих рядках ревізії. Для <code>roe.vsei.ua</code> і <code>suspilne.media</code> обробляє лише вже закриті посилання. Враховує точний домен і його варіант з <code>www</code>.</p>
+        <p>Telegram, Facebook, вбудовані матеріали та посилання з виявленими ознаками реклами пропускає. URL, анкор та інші значення <code>rel</code> зберігаються.</p>
         <?php elseif ($updating_attributes): ?>
         <p>Встановлює <code>target="_blank"</code> і додає <code>nofollow noopener</code> до <code>rel</code> посилань на <code><?php echo esc_html($projects[$project]['hosts'][0]); ?></code> та піддомени. Інші значення <code>rel</code>, URL і текст посилання зберігаються.</p>
         <?php elseif ($project==='legacy_urls'): ?>
@@ -295,7 +305,11 @@ final class OGO_Media_Cleaner {
         <p>Видаляє окремі текстові рекомендації, «За матеріалами…» та впізнані запрошення «Продовження читайте/переглядайте на сайті…» з посиланнями <code>day.ogo.ua</code>. У змістовних реченнях знімає тільки теги a, зберігаючи текст та оформлення. Підтримує числові й текстові назви .html, жирний текст і переноси всередині посилань. Вкладені посилання видаляє лише у цілому впізнаному фрагменті, якщо всі вони належать старому проєкту. Адреси <code>/articles/view/…</code> виправляйте через окрему заміну URL. Матеріали з необробленими посиланнями залишаються для ручної перевірки.</p>
         <?php endif; ?>
         <?php if (!$archived): ?>
+        <?php if ($project==='source_batch_1'): ?>
+        <p>Область — текст опублікованих статей. Під час сканування створюється попередній перегляд.</p>
+        <?php else: ?>
         <p>Область: post_content типів <code><?php echo esc_html(implode(', ',self::post_types())); ?></code>, включно з чернетками та запланованими. Меню, віджети, метаполя й файли не змінює. Сканування нічого не змінює.</p>
+        <?php endif; ?>
         <p><button class="button button-primary" data-mode="start">Нове сканування</button> <button class="button" data-mode="scan">Продовжити сканування</button></p>
         <label><input type="checkbox" id="ogo-backup"> Я маю актуальну резервну копію бази даних.</label>
         <?php endif; ?>

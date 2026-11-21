@@ -2,6 +2,9 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.38.0](dist/ogo-cleaner-1.38.0.zip) оновлює атрибути першої
+погодженої партії зовнішніх посилань, зі статусами з аудиту.
+
 [ZIP 1.37.0](dist/ogo-cleaner-1.37.0.zip) відновлює старі YouTube-вставки
 через шорткод `[embed]` і показує джерело у Flash-звіті.
 
@@ -46,6 +49,7 @@ php tests/source-links.php
 php tests/coverage.php
 php tests/flash.php
 php tests/site-links.php
+php tests/source-batch.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```
