@@ -2,6 +2,9 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.34.0](dist/ogo-cleaner-1.34.0.zip) додає «Вибір 2010 — головна → Рейтинги».
+[CSV для Redirection](dist/ogo-vybir2010-301.csv) містить лише дві форми головної.
+
 [ZIP 1.33.0](dist/ogo-cleaner-1.33.0.zip) додає «Не знайдено (404)». Режим
 зіставляє адреси з експортованого ZIP або CSV Search Console з посиланнями
 в опублікованих матеріалах WordPress і формує звіт із джерелами.

@@ -51,6 +51,19 @@ foreach (array('<a href="/rubrics/view/defense">x','<a href="/rubrics/view/defen
 $html='<a href="/rubrics/view/defense">good</a><a href="/rubrics/view/policy">unclosed';
 editorial_check($html,'<a href="https://ogo.ua/tag/oborona/">good</a><a href="/rubrics/view/policy">unclosed',2,1,1);
 echo 'Passed '.$count." editorial mapping cases, audit agreement and active-rubric protection.\n";
+$before='<a href="https://ogo.ua/vybir2010">Вибір</a><a href=/vybir2010/>Головна</a>'
+    .'<a href="//www.ogo.ua/vybir2010/?x=1&amp;y=2#section">Розділ</a>'
+    .'<a href="/vybir2010/articles/view/2018-04-15/92874.html">Стаття</a>'
+    .'<a href="/vybir2010/rubrics/view/vybory-news">Рубрика</a><a href="/vybir2010-more">Схожий шлях</a>'
+    .'<a href="https://example.org/vybir2010">Інший домен</a>'
+    .'<!-- <a href="/vybir2010">Коментар</a> --><code><a href="/vybir2010">Код</a></code>';
+$expected='<a href="https://ogo.ua/tag/rejtyngy/">Вибір</a><a href=https://ogo.ua/tag/rejtyngy/>Головна</a>'
+    .'<a href="https://ogo.ua/tag/rejtyngy/?x=1&amp;y=2#section">Розділ</a>'
+    .substr($before,strpos($before,'<a href="/vybir2010/articles/'));
+$vybir=OGO_MC_Engine::analyze($before,'vybir_home');
+if ($vybir['after']!==$expected || $vybir['removed']!==3 || $vybir['review']!==0) throw new RuntimeException('Vybir home scope failed');
+if (OGO_MC_Engine::analyze($expected,'vybir_home')['total']!==0) throw new RuntimeException('Vybir home repeat run must have no matches');
+echo "Passed Vybir home exact scope and repeat-run checks.\n";
 if (isset($argv[1])) {
     $cases=json_decode(file_get_contents($argv[1]),true,512,JSON_THROW_ON_ERROR);
     $links=0;

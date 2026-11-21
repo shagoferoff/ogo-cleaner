@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.33.0
+ * Version: 1.34.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -14,7 +14,7 @@ require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.33.0';
+    public const VERSION = '1.34.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
@@ -113,7 +113,7 @@ final class OGO_Media_Cleaner {
             if (empty($s['run'])) wp_send_json_error('Спочатку почніть сканування.');
             if (($s['engine_version']??'')!==self::VERSION) wp_send_json_error('Після оновлення почніть нове сканування цього проєкту.');
             if (!$s['complete']) {
-                $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true);
+                $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home'),true);
                 $posts=$wpdb->get_results($wpdb->prepare(
                     "SELECT ID,post_content,post_modified_gmt,post_status FROM {$wpdb->posts} WHERE ID>%d AND ID<=%d AND post_type IN (".self::post_type_placeholders().") AND post_status IN ('publish','private','draft','pending','future') ORDER BY ID LIMIT 50",
                     array_merge(array($s['cursor'],$s['max']),self::post_types())
@@ -198,7 +198,7 @@ final class OGO_Media_Cleaner {
         if (!self::valid_project($project)) $project=self::DEFAULT_PROJECT;
         $archived=OGO_MC_Engine::is_archived($project);
         $s=self::state($project); $projects=OGO_MC_Engine::projects();
-        $replacing=in_array($project,array('day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls'),true);
+        $replacing=in_array($project,array('day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home'),true);
         $unwrapping=in_array($project,array('catalog','media_unwrap','segodnya'),true);
         $updating_attributes=($projects[$project]['link_action']??'')==='attributes';
         $vk_mode=$project==='vk';
@@ -243,6 +243,8 @@ final class OGO_Media_Cleaner {
         <?php elseif ($vk_mode): ?>
         <p>Знімає посилання на точні домени <code>vk.com</code> і <code>www.vk.com</code> зі збереженням імен, назв груп, джерел, оформлення та іншого тексту. <code>vovk.com</code> не змінює.</p>
         <p>У простих списках «Або ж пишіть нам у соцмережах…» прибирає пункти ВК та роздільники, залишаючи Facebook. Видаляє окремий абзац «Група зустрічі: vk.com/…» і впізнаний абзац конкурсу книг із двома наведеними email. Інші конкурси автоматично не видаляє. Посилання з голою адресою ВК, складні списки й неоднозначні шаблони залишає для перевірки. Результат кожного правила видно в журналі.</p>
+        <?php elseif ($project==='vybir_home'): ?>
+        <p>Замінює посилання на головну <code>/vybir2010</code> і <code>/vybir2010/</code> на <code>https://ogo.ua/tag/rejtyngy/</code>. Посилання на статті та інші підсторінки пропускає. Текст, оформлення, параметри та фрагменти зберігаються.</p>
         <?php elseif ($project==='editorial_urls'): ?>
         <p>Замінює старі рубрики за погодженою редакцією картою: рецепти газети, підсумки року, рейтинги, оборона, Волинь, Європа, Євро-2012, довідка, один день, політика, нові обличчя, вибори, бізнес, агровиробники, гороскоп, влада й рукоділля. Змінює лише href, зберігаючи текст, оформлення та інші атрибути.</p>
         <p>Старі рейтингові рубрики з токеном <code>top</code> (також <code>top20</code>) або <code>influence</code> у назві ведуть на <code>https://ogo.ua/tag/rejtyngy/</code>. Це правило діє лише для рубрик головного сайту; активна <code>/rubrics/view/top/</code> не змінюється. Для <code>ogo20</code> є окремий точний відповідник.</p>

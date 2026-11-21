@@ -2,6 +2,8 @@
 /** Editorially approved retired rubric mappings; change href bytes only. */
 final class OGO_MC_Editorial {
     private const TAG = '<(?:[^>"\']|"[^"]*"|\'[^\']*\')*>';
+    private const VYBIR_HOME = array('/vybir2010','/vybir2010/');
+    private const VYBIR_TARGET = 'https://ogo.ua/tag/rejtyngy/';
     private const MAP = array(
         '/gazeta/rubrics/view/gazeta-recipes'=>'reczepty',
         '/gazeta/rubrics/view/goroskop'=>'goroskop',
@@ -38,10 +40,12 @@ final class OGO_MC_Editorial {
         $tag = self::tag($m[1]);
         return $tag === null ? null : 'https://ogo.ua/tag/'.$tag.'/';
     }
-    private static function candidate($info) {
+    private static function candidate($info,$home_only) {
         if (!$info || !is_array($info['parts'])) return false;
         $p = $info['parts'];
-        if (!preg_match('~^((?:/(?:gazeta|vybir2010))?/rubrics/view/[a-z0-9_-]+)(?:/|$)~D', $p['path'] ?? '', $m) || self::tag($m[1]) === null) return false;
+        if ($home_only) {
+            if (!in_array($p['path']??'',self::VYBIR_HOME,true)) return false;
+        } elseif (!preg_match('~^((?:/(?:gazeta|vybir2010))?/rubrics/view/[a-z0-9_-]+)(?:/|$)~D', $p['path'] ?? '', $m) || self::tag($m[1]) === null) return false;
         if (isset($p['user']) || isset($p['pass'])) return false;
         if (isset($p['host'])) {
             $scheme = strtolower($p['scheme'] ?? '');
@@ -50,18 +54,18 @@ final class OGO_MC_Editorial {
         } elseif (isset($p['scheme']) || substr(trim($info['raw']),0,1) !== '/') return false;
         return true;
     }
-    private static function replacement($info) {
-        $p = $info['parts']; $target = self::destination_for_path($p['path']);
+    private static function replacement($info,$home_only) {
+        $p = $info['parts']; $target = $home_only?self::VYBIR_TARGET:self::destination_for_path($p['path']);
         if ($target === null) return null;
         $url = preg_replace('~^(\s*)(?:(?i:https?://|//)(?i:www\.)?(?i:ogo\.ua)(?::(?:80|443))?)?'.preg_quote($p['path'],'~').'(?=[?#\s]|$)~', '$1'.$target, $info['raw'],1,$count);
         if (!$count) return null;
-        if (($p['fragment'] ?? '') === 'page-top') {
+        if (!$home_only && ($p['fragment'] ?? '') === 'page-top') {
             $url = preg_replace('~#page-top(?=\s*$)~','',$url,1,$count);
             if (!$count) return null;
         }
         return $url;
     }
-    public static function analyze($content) {
+    public static function analyze($content,$home_only=false) {
         $raw = '<(script|style|textarea|pre|code)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\1\s*>|$)';
         preg_match_all('~<!--[\s\S]*?(?:-->|$)|'.$raw.'|'.self::TAG.'~i',$content,$tokens,PREG_SET_ORDER | PREG_OFFSET_CAPTURE);
         $stack=array(); $edits=array(); $total=0;
@@ -76,15 +80,15 @@ final class OGO_MC_Editorial {
                         if (is_array($parts)) { unset($parts['scheme'],$parts['host']); $info['parts']=$parts; }
                     }
                 }
-                $target = self::candidate($info); if ($target) ++$total;
-                $invalid = !empty($stack) || preg_match('~/\s*>$~',$tag);
+                $target = self::candidate($info,$home_only); if ($target) ++$total;
+                $invalid = !empty($stack) || ($home_only ? OGO_MC_Engine::self_closing_anchor($tag) : preg_match('~/\s*>$~',$tag));
                 if ($stack) foreach ($stack as &$open) $open['invalid']=true;
                 unset($open);
                 $stack[]=array('offset'=>$offset,'info'=>$info,'target'=>$target,'invalid'=>$invalid);
             } elseif (preg_match('~^</a\s*>$~i',$tag) && $stack) {
                 $open=array_pop($stack);
                 if (!$open['target'] || $open['invalid']) continue;
-                $url=self::replacement($open['info']);
+                $url=self::replacement($open['info'],$home_only);
                 if ($url !== null) $edits[]=array($open['offset']+$open['info']['offset'],$open['info']['length'],$url);
             }
         }
@@ -92,6 +96,6 @@ final class OGO_MC_Editorial {
         foreach ($edits as $edit) $after=substr_replace($after,$edit[2],$edit[0],$edit[1]);
         $changed=count($edits); $review=$total-$changed;
         return array('after'=>$after,'total'=>$total,'removed'=>$changed,'review'=>$review,'fragments'=>array(),
-            'summary'=>'Замінено погоджених рубричних URL: '.$changed.'.'.($review ? ' Неоднозначні або пошкоджені посилання залишено для ручної перевірки: '.$review.'.' : ''));
+            'summary'=>($home_only?'Замінено посилань на головну «Вибір 2010»: ':'Замінено погоджених рубричних URL: ').$changed.'.'.($review ? ' Неоднозначні або пошкоджені посилання залишено для ручної перевірки: '.$review.'.' : ''));
     }
 }

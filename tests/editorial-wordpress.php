@@ -10,8 +10,8 @@ class OGO_Editorial_Test_Exit extends RuntimeException {}
 add_filter('wp_die_ajax_handler',function(){return function(){throw new OGO_Editorial_Test_Exit();};});
 $count=0;
 function editorial_integration_check($ok,$message) { global $count; if (!$ok) throw new RuntimeException($message); ++$count; }
-function editorial_request($mode,$run='') {
-    $_POST=array('mode'=>$mode,'run'=>$run,'project'=>'editorial_urls','backup'=>'1','nonce'=>wp_create_nonce('ogo_mc')); $_REQUEST=$_POST;
+function editorial_request($mode,$run='',$project='editorial_urls') {
+    $_POST=array('mode'=>$mode,'run'=>$run,'project'=>$project,'backup'=>'1','nonce'=>wp_create_nonce('ogo_mc')); $_REQUEST=$_POST;
     ob_start();
     try { do_action('wp_ajax_ogo_mc'); } catch (OGO_Editorial_Test_Exit $e) {}
     finally { delete_option('ogo_mc_lock'); } // Emulate end-of-request shutdown in this CLI process.
@@ -49,4 +49,18 @@ $state=$wpdb->get_var($wpdb->prepare("SELECT status FROM $table WHERE run_id=%s 
 editorial_integration_check($state==='conflict','Concurrent edit recorded as conflict');
 $_GET=array('project'=>'editorial_urls'); ob_start(); OGO_Media_Cleaner::page(); $html=ob_get_clean();
 editorial_integration_check(strpos($html,'Замінити всі готові URL')!==false && strpos($html,'Погоджені рубрики')!==false,'New operation renders URL-replacement controls');
+$project='vybir_home';
+$child='<a href="/vybir2010/articles/view/2018-04-15/92874.html">Стаття</a>';
+$vybir_before='<a href="/vybir2010/">Вибір</a> '.$child;
+$vybir_after='<a href="https://ogo.ua/tag/rejtyngy/">Вибір</a> '.$child;
+$vybir_id=wp_insert_post(wp_slash(array('post_title'=>'Vybir home fixture','post_status'=>'publish','post_content'=>$vybir_before)));
+$r=editorial_request('start','',$project); $run=$r['state']['run'];
+do { $r=editorial_request('scan',$run,$project); } while (!$r['state']['complete']);
+$row=$wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE run_id=%s AND post_id=%d",$run,$vybir_id));
+editorial_integration_check($row && $row->status==='ready' && $row->after_content===$vybir_after,'Vybir preview changes only the homepage link');
+editorial_request('apply',$run,$project);
+editorial_integration_check(get_post($vybir_id)->post_content===$vybir_after,'Vybir apply preserves links to nested articles');
+editorial_request('restore',$run,$project);
+editorial_integration_check(get_post($vybir_id)->post_content===$vybir_before,'Vybir rollback restores original content');
+wp_delete_post($vybir_id,true);
 echo 'Passed '.$count." WordPress scan/apply/rollback/concurrent-edit checks for editorial mappings.\n";
