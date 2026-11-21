@@ -47,6 +47,27 @@ final class OGO_MC_External {
     }
     private static function valid_run($run) { return is_string($run) && preg_match('/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/D',$run); }
     public static function state($run='') { return get_option($run===''?'ogo_mc_external_scan':'ogo_mc_external_run_'.$run,array()); }
+    public static function cleanup_audit($run) {
+        if (!self::valid_run($run) || get_option('ogo_mc_external_schema')!==self::SCHEMA) return array();
+        $state=self::state($run);
+        return !empty($state['complete']) && ($state['run']??'')===$run && ($state['manifest']??'')===OGO_MC_External_List::digest() ? $state : array();
+    }
+    public static function cleanup_posts($run,$cursor,$max,$limit) {
+        global $wpdb; $table=self::table();
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID,p.post_content,p.post_modified_gmt,p.post_status FROM {$wpdb->posts} p
+             WHERE p.ID>%d AND p.ID<=%d AND p.post_type='post' AND p.post_status='publish'
+             AND EXISTS (SELECT 1 FROM $table a WHERE a.run_id=%s AND a.post_id=p.ID AND a.kind='external' AND a.post_status='publish' AND a.link_count>0)
+             ORDER BY p.ID LIMIT %d",
+            $cursor,$max,$run,$limit
+        ));
+    }
+    public static function cleanup_targets($run,$post_id) {
+        global $wpdb; $table=self::table();
+        $rows=$wpdb->get_results($wpdb->prepare("SELECT raw_url,variant_key,link_count FROM $table WHERE run_id=%s AND post_id=%d AND kind='external' AND post_status='publish' AND link_count>0",$run,$post_id),ARRAY_A);
+        if ($wpdb->last_error) throw new RuntimeException('Не вдалося прочитати посилання з ревізії Міралінкс.');
+        return $rows;
+    }
     private static function save($s) {
         foreach(array('ogo_mc_external_scan','ogo_mc_external_run_'.$s['run']) as $key) {
             if(!update_option($key,$s,false) && get_option($key)!==$s)throw new RuntimeException('Не вдалося зберегти прогрес ревізії.');
@@ -207,6 +228,9 @@ final class OGO_MC_External {
         <p id="ogo-audit-progress" role="status" aria-live="polite">Перевірено ID: <?php echo (int)($current['scanned']??0); ?> із <?php echo count(OGO_MC_External_List::ids()); ?>. <?php echo !empty($current['complete'])?'Завершено.':'Можна продовжити сканування.';?></p>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><input type="hidden" name="project" value="external_audit"><label>Запуск <select name="run"><?php foreach(get_option('ogo_mc_external_history',array()) as $id)if(self::valid_run($id)){$meta=self::state($id);echo '<option value="'.esc_attr($id).'" '.selected($run,$id,false).'>'.esc_html(($meta['started']??$id).' — '.(!empty($meta['complete'])?'завершено':'частково')).'</option>';}?></select></label> <label>Категорія <select name="kind"><option value="">Усі</option><?php foreach($labels as $key=>$label)echo '<option value="'.esc_attr($key).'" '.selected($kind,$key,false).'>'.esc_html($label).'</option>';?></select></label> <label>Звіт <select name="view"><option value="domains" <?php selected($view,'domains');?>>За доменами</option><option value="details" <?php selected($view,'details');?>>Статті та анкори</option></select></label> <button class="button">Показати</button></form>
         <?php if($s): ?>
+        <?php if(self::cleanup_audit($run)): ?>
+        <p><a class="button button-primary" href="<?php echo esc_url(add_query_arg(array('page'=>'ogo-media-cleaner','project'=>'miralinks_unwrap','audit_run'=>$run),admin_url('tools.php'))); ?>">Підготувати очищення за цією ревізією</a></p>
+        <?php endif; ?>
         <?php if(($s['manifest']??'')!==OGO_MC_External_List::digest())echo '<div class="notice notice-warning"><p>Історичний звіт за попереднім списком: він міг включати приховані аркуші. Його CSV-експорт заблоковано. Натисніть «Нова ревізія», щоб перевірити лише видимі аркуші.</p></div>'; ?>
         <p><strong><?php echo !empty($s['complete'])?'Завершений звіт':'Частковий звіт — сканування не завершене'; ?>.</strong> Перевірено ID: <?php echo (int)$s['scanned']; ?>. Адрес: <?php echo (int)$stats['totals']['urls']; ?>; посилань: <?php echo (int)$stats['totals']['links']; ?>; матеріалів із посиланнями: <?php echo (int)$stats['totals']['materials']; ?>. Дані на момент сканування; це список для оцінки, а не підтверджена реклама.</p>
         <?php foreach($stats['kinds'] as $row)echo '<p>'.esc_html($labels[$row['kind']].': '.$row['materials'].' матеріалів; '.$row['links'].' посилань.').'</p>'; ?>

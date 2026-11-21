@@ -5,7 +5,7 @@ const source = fs.readFileSync(__dirname + '/../ogo-media-cleaner/assets/admin.j
 const config = project => ({
   project, url:'/wp-admin/admin-ajax.php', nonce:'test-nonce', run:'current-run',
   currentRun:'current-run', hasRun:true, complete:true,
-  vkMode:project==='vk', unwrapping:project==='segodnya',
+  vkMode:project==='vk', unwrapping:['segodnya','miralinks_unwrap'].includes(project),
   updatingAttributes:['tsn','korrespondent','source_batch_1'].includes(project),
   replacing:['day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home'].includes(project)
 });
@@ -36,7 +36,7 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
   return {requests,prompts,alerts,redirect,button,progress:elements.get('ogo-progress').textContent};
 }
 (async()=>{
-  const projects=['legacy_missing','segodnya','tsn','korrespondent','source_batch_1','editorial_urls','vybir_home','woman_urls','dim_urls','nashregion_urls','pets_urls','garden_urls','horoscope_urls','ustream','flash','vk','legacy_urls','day_urls','day'];
+  const projects=['legacy_missing','segodnya','miralinks_unwrap','tsn','korrespondent','source_batch_1','editorial_urls','vybir_home','woman_urls','dim_urls','nashregion_urls','pets_urls','garden_urls','horoscope_urls','ustream','flash','vk','legacy_urls','day_urls','day'];
   for(const project of projects) {
     const r=await scenario({project});
     assert.strictEqual(r.prompts.length,1);assert.strictEqual(r.requests.length,1);
@@ -44,7 +44,7 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
     assert.strictEqual(body.project,project);assert.strictEqual(body.action,'ogo_mc');assert.strictEqual(body.nonce,'test-nonce');assert.strictEqual(body.backup,'1');
     assert.ok(r.redirect.includes('project='+project));
     // Optional differential check against a supplied previous release.
-    if(process.env.OGO_PREVIOUS_ADMIN_JS && !['legacy_missing','segodnya','korrespondent','source_batch_1','vybir_home','flash'].includes(project)) {
+    if(process.env.OGO_PREVIOUS_ADMIN_JS && !['legacy_missing','segodnya','miralinks_unwrap','korrespondent','source_batch_1','vybir_home','flash'].includes(project)) {
       const previous=await scenario({project,script:fs.readFileSync(process.env.OGO_PREVIOUS_ADMIN_JS,'utf8')});
       assert.deepStrictEqual(JSON.parse(JSON.stringify(r)),JSON.parse(JSON.stringify(previous)),'Behavior changed for '+project);
     }
@@ -68,6 +68,11 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
   assert.ok(!r.progress.includes('Перевірено:'));
   r=await scenario({mode:'start',responses:[response(false),response(false),response()]});
   assert.deepStrictEqual(r.requests.map(body=>Object.fromEntries(body).mode),['start','scan','scan']);
+  const started=response(false);
+  started.data.state.run='new-cleanup-run';
+  r=await scenario({project:'miralinks_unwrap',mode:'start',overrides:{auditRun:'chosen-audit-run'},responses:[started,response()]});
+  assert.strictEqual(Object.fromEntries(r.requests[0]).audit_run,'chosen-audit-run');
+  assert.strictEqual(Object.fromEntries(r.requests[1]).run,'new-cleanup-run');
   r=await scenario({mode:'scan',responses:[response(false),response()]});assert.strictEqual(r.requests.length,2);
   for(const error of [new Error('Network unavailable'),{success:false,data:'Access denied'}]) {
     r=await scenario({responses:[error]});assert.ok(!r.redirect);assert.ok(r.progress.includes('Зупинено:'));assert.strictEqual(r.button.disabled,false);

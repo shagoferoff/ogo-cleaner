@@ -20,12 +20,15 @@ final class OGO_MC_External_Engine {
         $network=self::family($host,'my.rv.ua') || self::family($host,'volyninfo.com');
         return array('kind'=>$network?'network':'external','domain'=>$host,'target_url'=>$url,'raw_url'=>$raw,'issue'=>'');
     }
-    private static function label($html) {
+    public static function label($html) {
         $html=preg_replace('~<!--[\s\S]*?(?:-->|$)|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?(?:</\1\s*>|$)~i','',$html);
         $text=html_entity_decode(strip_tags($html),ENT_QUOTES | ENT_HTML5,'UTF-8');
         $normalized=preg_replace('/[\s\p{Z}]+/u',' ',$text);
         $text=trim($normalized===null?$text:$normalized);
         return $text===''?'[посилання без тексту]':$text;
+    }
+    public static function variant_key($raw,$anchor,$issue='') {
+        return hash('sha256',json_encode(array($raw,$anchor,$issue),JSON_INVALID_UTF8_SUBSTITUTE));
     }
     public static function link_attributes($tag) {
         $attrs=array();
@@ -65,9 +68,10 @@ final class OGO_MC_External_Engine {
                 $row['kind']='review'; $row['issue']='Вкладене, незакрите або пошкоджене посилання';
             }
             $row['anchor_text']=$open['end']===null?'[незакрите посилання]':self::label(substr($content,$open['start'],$open['end']-$open['start']));
-            $variant=array($row['raw_url'],$row['anchor_text'],$row['issue']);
-            if ($with_attributes) $variant=array_merge($variant,array($row['rel'],$row['new_tab']));
-            $key=hash('sha256',json_encode($variant,JSON_INVALID_UTF8_SUBSTITUTE));
+            $key=self::variant_key($row['raw_url'],$row['anchor_text'],$row['issue']);
+            if ($with_attributes) {
+                $key=hash('sha256',json_encode(array($row['raw_url'],$row['anchor_text'],$row['issue'],$row['rel'],$row['new_tab']),JSON_INVALID_UTF8_SUBSTITUTE));
+            }
             if (isset($links[$key])) ++$links[$key]['link_count'];
             else { $row['variant_key']=$key; $row['url_key']=hash('sha256',$row['target_url']!==''?$row['target_url']:$row['raw_url']); $row['link_count']=1; $links[$key]=$row; }
         }

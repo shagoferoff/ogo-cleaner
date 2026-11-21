@@ -92,7 +92,33 @@ final class OGO_MC_Source_Links {
         },true,true);
     }
 
-    private static function edit_links($content,$matches,$update_attributes,$protect_embeds=false) {
+    public static function miralinks($content,$targets) {
+        require_once __DIR__.'/external-engine.php';
+        $counts=array_column($targets,'link_count','variant_key');
+        $hrefs=array_fill_keys(array_column($targets,'raw_url'),true);
+        $review=0;
+        foreach (OGO_MC_External_Engine::extract($content) as $link) {
+            $key=$link['variant_key'];
+            if (isset($counts[$key]) && $link['link_count']>(int)$counts[$key]) {
+                unset($counts[$key]);
+                ++$review;
+            }
+        }
+        $result=self::edit_links($content,function($tag) use ($hrefs) {
+            $href=OGO_MC_Engine::href_info($tag);
+            return $href && isset($hrefs[$href['raw']]);
+        },false,true,function($tag,$text) use ($counts) {
+            $href=OGO_MC_Engine::href_info($tag);
+            $key=OGO_MC_External_Engine::variant_key($href['raw'],OGO_MC_External_Engine::label($text));
+            return isset($counts[$key]);
+        });
+        $result['total']+=$review;
+        $result['review']+=$review;
+        if ($review) $result['summary'].=' Кількість однакових посилань збільшилася після ревізії. Потрібна ручна перевірка.';
+        return $result;
+    }
+
+    private static function edit_links($content,$matches,$update_attributes,$protect_embeds=false,$verify=null) {
         $stack=array();
         $edits=array();
         $changed=0;
@@ -112,6 +138,8 @@ final class OGO_MC_Source_Links {
                 $open=array_pop($stack);
                 if (!$open['target']) continue;
                 if ($open['nested']) { ++$review; continue; }
+                $text_start=$open['offset']+strlen($open['tag']);
+                if ($verify && !$verify($open['tag'],substr($content,$text_start,$offset-$text_start))) continue;
                 if ($update_attributes) {
                     $replacement=self::update_attributes($open['tag']);
                     if ($replacement===$open['tag']) continue;

@@ -10,6 +10,7 @@ final class OGO_MC_Engine {
     public static function projects() {
         return array(
             'external_audit' => array('label'=>'Міралінкс — ревізія зовнішніх посилань', 'hosts'=>array(), 'photo_callouts'=>false),
+            'miralinks_unwrap' => array('label'=>'Міралінкс — очищення за ревізією', 'hosts'=>array(), 'photo_callouts'=>false),
             'site_links' => array('label'=>'Зовнішні посилання — аудит сайту', 'hosts'=>array(), 'photo_callouts'=>false),
             'source_batch_1' => array('label'=>'Зовнішні посилання — перша партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'audit' => array('label'=>'Ревізія старих посилань', 'hosts'=>array('ogo.ua','ogo.rv.ua'), 'photo_callouts'=>false),
@@ -282,6 +283,7 @@ final class OGO_MC_Engine {
             return OGO_MC_Source_Links::analyze($content,$config['hosts'][0],$config['link_action']==='attributes');
         }
         if (in_array($project,array('audit','external_audit','coverage_404','site_links'),true)) throw new InvalidArgumentException('Use the read-only audit engine');
+        if ($project==='miralinks_unwrap') throw new InvalidArgumentException('A completed Miralinks audit is required');
         if ($project === 'flash') { require_once __DIR__.'/flash.php'; return OGO_MC_Flash::analyze($content); }
         // Preserve comments, code and raw text verbatim. Mask length remains identical.
         $masked = preg_replace_callback('~<!--[\s\S]*?-->|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?</\1\s*>~i', function($m) { return str_repeat(' ', strlen($m[0])); }, $content);

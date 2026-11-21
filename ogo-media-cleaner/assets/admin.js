@@ -4,6 +4,7 @@
   const applyPrompts = {
     legacy_missing: "Замінити URL наявних статей і зняти архівні та відсутні посилання зі збереженням тексту й оформлення згідно з попереднім переглядом?",
     segodnya: "Зняти посилання на segodnya.ua та піддомени, зберігши текст, оформлення й абзаци?",
+    miralinks_unwrap: "Зняти посилання за вибраною ревізією Міралінкс, зберігши текст та оформлення?",
     tsn: "Оновити target і rel посилань на tsn.ua та піддомени згідно з попереднім переглядом?",
     korrespondent: "Оновити target і rel посилань на korrespondent.net та піддомени згідно з попереднім переглядом?",
     source_batch_1: "Оновити target і rel посилань першої партії згідно з попереднім переглядом?",
@@ -24,6 +25,7 @@
   };
   const defaultApplyPrompt = "Видалити окремі посилання разом із текстом у готових матеріалах?";
   let busy = false, stop = false;
+  let miralinksRun = ogoMC.currentRun;
   const progress = document.getElementById('ogo-progress');
   const labels = {ready:'Готові',review:'Ручна перевірка',done:'Очищені',restored:'Відновлені',conflict:'Пропущені'};
   if(ogoMC.replacing) { labels.ready='Готові до заміни'; labels.done='URL замінено'; }
@@ -33,12 +35,17 @@
   document.getElementById('ogo-stop').addEventListener('click', () => { stop = true; });
   async function call(mode, ids, selected) {
     const body = new URLSearchParams({action:'ogo_mc',nonce:ogoMC.nonce,mode,run:ogoMC.run,project:ogoMC.project,backup:document.getElementById('ogo-backup')?.checked?'1':''});
+    if (ogoMC.project==='miralinks_unwrap') {
+      if (mode==='start') body.set('audit_run',ogoMC.auditRun);
+      if (mode==='scan') body.set('run',miralinksRun);
+    }
     if(selected) body.set('selected','1');
     if(ids) ids.forEach(id => body.append('ids[]',id));
     const response = await fetch(ogoMC.url,{method:'POST',body,credentials:'same-origin'});
     const result = await response.json();
     if(!result.success) throw new Error(typeof result.data==='string'?result.data:'Помилка сервера.');
     const d = result.data;
+    if (mode==='start' && ogoMC.project==='miralinks_unwrap') miralinksRun=d.state.run;
     const scanProgress = ogoMC.archived ? '' : `Перевірено: ${d.state.scanned}. ${d.state.complete?'Сканування завершено.':'Сканування триває.'} `;
     progress.textContent = scanProgress + d.stats.map(s=>`${labels[s.status]||s.status}: ${s.materials}`).join('; ');
     return d;

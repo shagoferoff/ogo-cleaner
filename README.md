@@ -2,6 +2,9 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.39.0](dist/ogo-cleaner-1.39.0.zip) додає очищення посилань
+за вибраною завершеною ревізією Міралінкс.
+
 [ZIP 1.38.0](dist/ogo-cleaner-1.38.0.zip) оновлює атрибути першої
 погодженої партії зовнішніх посилань, зі статусами з аудиту.
 
@@ -50,6 +53,7 @@ php tests/coverage.php
 php tests/flash.php
 php tests/site-links.php
 php tests/source-batch.php
+php tests/miralinks-cleanup.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.38.0
+ * Version: 1.39.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -15,11 +15,11 @@ require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 require_once __DIR__ . '/includes/site-links.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.38.0';
+    public const VERSION = '1.39.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types($project='') {
-        return $project==='source_batch_1'?array('post'):array('post','page','rivnenschina','dovidka','phogo','press');
+        return in_array($project,array('source_batch_1','miralinks_unwrap'),true)?array('post'):array('post','page','rivnenschina','dovidka','phogo','press');
     }
     private static function post_type_placeholders($project='') { return implode(',', array_fill(0, count(self::post_types($project)), '%s')); }
     public static function activate() {
@@ -103,6 +103,7 @@ final class OGO_Media_Cleaner {
         if (in_array($project,array('audit','external_audit','coverage_404','site_links'),true)) wp_send_json_error('Ревізія лише складає звіт. Використайте окремі кнопки сканування.');
         if (get_option('ogo_mc_schema')!=='1.3.1') wp_send_json_error('Не вдалося оновити таблицю журналу. Очищення не запущено.');
         $s=self::state($project);
+        $miralinks=$project==='miralinks_unwrap';
         // Site-wide operation lock; an interrupted request releases on shutdown.
         $owned_lock=array('time'=>time(),'token'=>wp_generate_uuid4());
         if (!add_option('ogo_mc_lock',$owned_lock,'','no')) {
@@ -113,26 +114,39 @@ final class OGO_Media_Cleaner {
         register_shutdown_function(function() use ($owned_lock){ if (get_option('ogo_mc_lock')===$owned_lock) delete_option('ogo_mc_lock'); });
         if ($mode==='start') {
             $s=array('run'=>wp_generate_uuid4(),'cursor'=>0,'max'=>(int)$wpdb->get_var("SELECT MAX(ID) FROM {$wpdb->posts}"),'scanned'=>0,'complete'=>false,'project'=>$project,'engine_version'=>self::VERSION);
+            if ($wpdb->last_error) wp_send_json_error('Не вдалося визначити межу сканування.');
+            if ($miralinks) {
+                $audit_run=sanitize_text_field(wp_unslash($_POST['audit_run']??''));
+                if (!OGO_MC_External::cleanup_audit($audit_run)) wp_send_json_error('Відкрийте завершену ревізію Міралінкс і виберіть очищення за нею.');
+                $s['audit_run']=$audit_run;
+            }
             update_option(self::option_name($project),$s,false);
         } elseif ($mode==='scan') {
             if (empty($s['run'])) wp_send_json_error('Спочатку почніть сканування.');
             if (($s['engine_version']??'')!==self::VERSION) wp_send_json_error('Після оновлення почніть нове сканування цього проєкту.');
+            if ($miralinks && (sanitize_text_field(wp_unslash($_POST['run']??''))!==$s['run'] || !OGO_MC_External::cleanup_audit($s['audit_run']??''))) {
+                wp_send_json_error('Відкрийте поточне очищення за завершеною ревізією Міралінкс.');
+            }
             if (!$s['complete']) {
                 $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home','flash'),true);
                 $first_batch=$project==='source_batch_1';
                 $statuses=$first_batch?"'publish'":"'publish','private','draft','pending','future'";
                 $limit=$first_batch?200:50;
-                $posts=$wpdb->get_results($wpdb->prepare(
+                $posts=$miralinks?OGO_MC_External::cleanup_posts($s['audit_run'],$s['cursor'],$s['max'],$limit):$wpdb->get_results($wpdb->prepare(
                     "SELECT ID,post_content,post_modified_gmt,post_status FROM {$wpdb->posts} WHERE ID>%d AND ID<=%d AND post_type IN (".self::post_type_placeholders($project).") AND post_status IN ($statuses) ORDER BY ID LIMIT %d",
                     array_merge(array($s['cursor'],$s['max']),self::post_types($project),array($limit))
                 ));
                 if ($wpdb->last_error) wp_send_json_error('Не вдалося прочитати матеріали.');
                 foreach ($posts as $p) {
-                    $a=OGO_MC_Engine::analyze($p->post_content,$project);
+                    if ($miralinks) {
+                        require_once __DIR__.'/includes/source-links.php';
+                        try { $a=OGO_MC_Source_Links::miralinks($p->post_content,OGO_MC_External::cleanup_targets($s['audit_run'],$p->ID)); }
+                        catch (RuntimeException $e) { wp_send_json_error($e->getMessage()); }
+                    } else $a=OGO_MC_Engine::analyze($p->post_content,$project);
                     if ($a['total']) {
-                        $ready=$a['removed'] && (!$block_on_review || !$a['review']);
+                        $ready=$a['removed'] && (!($block_on_review || $miralinks) || !$a['review']);
                         $entry=array('run_id'=>$s['run'],'project'=>$project,'post_id'=>$p->ID,'before_content'=>$p->post_content,'after_content'=>$a['after'],'modified_gmt'=>$p->post_modified_gmt,'post_status'=>$p->post_status,'status'=>$ready?'ready':'review','removed'=>$a['removed'],'review'=>$a['review'],'message'=>$a['summary']??'');
-                        $ok=$first_batch?$wpdb->replace($t,$entry):$wpdb->insert($t,$entry);
+                        $ok=($first_batch || $miralinks)?$wpdb->replace($t,$entry):$wpdb->insert($t,$entry);
                         if (!$ok) wp_send_json_error('Не вдалося записати звіт. Перезапустіть сканування.');
                     }
                     $s['cursor']=(int)$p->ID; ++$s['scanned'];
@@ -145,6 +159,7 @@ final class OGO_Media_Cleaner {
             if ($mode==='apply' && (($s['engine_version']??'')!==self::VERSION || sanitize_text_field(wp_unslash($_POST['run']??''))!==($s['run']??''))) wp_send_json_error('Виконайте нове сканування для цього проєкту й відкрийте його звіт.');
             if ($mode==='apply' && empty($s['complete'])) wp_send_json_error('Спочатку завершіть сканування.');
             if ($mode==='apply' && empty($_POST['backup'])) wp_send_json_error('Підтвердьте наявність резервної копії.');
+            if ($mode==='apply' && $miralinks && !OGO_MC_External::cleanup_audit($s['audit_run']??'')) wp_send_json_error('Пов’язана ревізія Міралінкс недоступна.');
             $ids=isset($_POST['ids'])?array_slice(array_filter(array_map('absint',(array)$_POST['ids'])),0,20):array();
             $status=$mode==='apply'?'ready':'done';
             $operation_run=$mode==='restore'?sanitize_text_field(wp_unslash($_POST['run']??($s['run']??''))):$s['run'];
@@ -209,14 +224,22 @@ final class OGO_Media_Cleaner {
         if (!self::valid_project($project)) $project=self::DEFAULT_PROJECT;
         $archived=OGO_MC_Engine::is_archived($project);
         $s=self::state($project); $projects=OGO_MC_Engine::projects();
+        $miralinks=$project==='miralinks_unwrap';
+        $audit_run='';
+        if ($miralinks) {
+            $audit_run=sanitize_text_field(wp_unslash($_GET['audit_run']??($s['audit_run']??(OGO_MC_External::state()['run']??''))));
+            if (!OGO_MC_External::cleanup_audit($audit_run)) $audit_run='';
+        }
         $replacing=in_array($project,array('day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home'),true);
-        $unwrapping=in_array($project,array('catalog','media_unwrap','segodnya'),true);
+        $unwrapping=in_array($project,array('catalog','media_unwrap','segodnya','miralinks_unwrap'),true);
         $updating_attributes=($projects[$project]['link_action']??'')==='attributes';
         $vk_mode=$project==='vk';
         $ustream_mode=$project==='ustream';
         $flash_mode=$project==='flash';
         $runs=$wpdb->get_col($wpdb->prepare("SELECT run_id FROM $t WHERE project=%s GROUP BY run_id ORDER BY MAX(id) DESC".($archived?'':' LIMIT 30'),$project));
         $operation_run=$s['run']??($runs[0]??'');
+        $matching_audit=!$miralinks || ($audit_run!=='' && $audit_run===($s['audit_run']??''));
+        if ($miralinks && isset($_GET['audit_run']) && !$matching_audit) $operation_run='';
         $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):$operation_run;
         $page=max(1,absint($_GET['paged']??1));
         $rows=$wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE run_id=%s AND project=%s ORDER BY id LIMIT 20 OFFSET %d",$run,$project,($page-1)*20));
@@ -241,7 +264,7 @@ final class OGO_Media_Cleaner {
         if ($vk_mode) { $apply_selected='Обробити вибрані'; $apply_all='Обробити всі готові'; }
         if ($updating_attributes) { $apply_selected='Оновити вибрані'; $apply_all='Оновити всі готові'; }
         wp_enqueue_script('ogo-mc',plugins_url('assets/admin.js',__FILE__),array(), self::VERSION,true);
-        wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'updatingAttributes'=>$updating_attributes,'vkMode'=>$vk_mode,'archived'=>$archived));
+        wp_localize_script('ogo-mc','ogoMC',array('url'=>admin_url('admin-ajax.php'),'nonce'=>wp_create_nonce('ogo_mc'),'complete'=>!empty($s['complete']),'hasRun'=>!empty($s['run']),'run'=>$run,'currentRun'=>$s['run']??'','project'=>$project,'projectLabel'=>$projects[$project]['label'],'replacing'=>$replacing,'unwrapping'=>$unwrapping,'updatingAttributes'=>$updating_attributes,'vkMode'=>$vk_mode,'archived'=>$archived,'auditRun'=>$audit_run));
         ?>
         <div class="wrap"><h1>OGO Cleaner</h1>
         <p><strong>Версія <?php echo esc_html(self::VERSION); ?>.</strong></p>
@@ -288,6 +311,13 @@ final class OGO_Media_Cleaner {
         <?php elseif ($project==='legacy_missing'): ?>
         <p>Знімає лише теги <code>&lt;a&gt;</code> з архівних адрес <code>/archive/дата/розділ/число</code> та <code>/rubrics/рубрика/дата/число</code>. Текст, оформлення й абзаци зберігаються. Числа з цих адрес не використовуються для пошуку статей; активні <code>/rubrics/view/…</code> пропускаються.</p>
         <p>Для старих адрес <code>/articles/…</code> перевіряє ID у WordPress. Доступна публічна стаття отримує актуальний URL. Якщо запису немає, знімає лише теги посилання. Не використовує HTTP 404 як доказ відсутності. Закриті записи, неоднозначні адреси й пошкоджений HTML потребують ручної перевірки.</p>
+        <?php elseif ($miralinks): ?>
+        <p>Знімає лише теги <code>&lt;a&gt;</code> збігів із вибраної ревізії в опублікованих статтях. Порівнює ID статті, адресу й анкор. Текст та оформлення зберігаються.</p>
+        <?php if ($audit_run!==''): ?>
+        <p>Джерело очищення — <a href="<?php echo esc_url(add_query_arg(array('page'=>'ogo-media-cleaner','project'=>'external_audit','run'=>$audit_run),admin_url('tools.php'))); ?>">вибрана ревізія Міралінкс</a>.</p>
+        <?php else: ?>
+        <p>Відкрийте <a href="<?php echo esc_url(add_query_arg(array('page'=>'ogo-media-cleaner','project'=>'external_audit'),admin_url('tools.php'))); ?>">завершену ревізію Міралінкс</a> і натисніть «Підготувати очищення за цією ревізією».</p>
+        <?php endif; ?>
         <?php elseif ($project==='segodnya'): ?>
         <p>Знімає лише теги <code>&lt;a&gt;</code> з посилань на <code>segodnya.ua</code> та піддомени. Текст, оформлення й абзаци зберігаються.</p>
         <?php elseif ($project==='source_batch_1'): ?>
@@ -305,16 +335,19 @@ final class OGO_Media_Cleaner {
         <p>Видаляє окремі текстові рекомендації, «За матеріалами…» та впізнані запрошення «Продовження читайте/переглядайте на сайті…» з посиланнями <code>day.ogo.ua</code>. У змістовних реченнях знімає тільки теги a, зберігаючи текст та оформлення. Підтримує числові й текстові назви .html, жирний текст і переноси всередині посилань. Вкладені посилання видаляє лише у цілому впізнаному фрагменті, якщо всі вони належать старому проєкту. Адреси <code>/articles/view/…</code> виправляйте через окрему заміну URL. Матеріали з необробленими посиланнями залишаються для ручної перевірки.</p>
         <?php endif; ?>
         <?php if (!$archived): ?>
-        <?php if ($project==='source_batch_1'): ?>
+        <?php if ($project==='source_batch_1' || $miralinks): ?>
         <p>Область — текст опублікованих статей. Під час сканування створюється попередній перегляд.</p>
         <?php else: ?>
         <p>Область: post_content типів <code><?php echo esc_html(implode(', ',self::post_types())); ?></code>, включно з чернетками та запланованими. Меню, віджети, метаполя й файли не змінює. Сканування нічого не змінює.</p>
         <?php endif; ?>
-        <p><button class="button button-primary" data-mode="start">Нове сканування</button> <button class="button" data-mode="scan">Продовжити сканування</button></p>
+        <?php if (!$miralinks || $audit_run!==''): ?>
+        <p><button class="button button-primary" data-mode="start"><?php echo $miralinks?'Підготувати попередній перегляд':'Нове сканування'; ?></button>
+        <?php if ($matching_audit): ?><button class="button" data-mode="scan">Продовжити сканування</button><?php endif; ?></p>
+        <?php endif; ?>
         <label><input type="checkbox" id="ogo-backup"> Я маю актуальну резервну копію бази даних.</label>
         <?php endif; ?>
         <p>
-            <?php if (!$archived): ?>
+            <?php if (!$archived && $matching_audit): ?>
             <button class="button" data-mode="apply" data-selected="1"><?php echo esc_html($apply_selected); ?></button>
             <button class="button" data-mode="apply"><?php echo esc_html($apply_all); ?></button>
             <?php endif; ?>
