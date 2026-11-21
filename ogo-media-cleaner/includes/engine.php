@@ -20,6 +20,7 @@ final class OGO_MC_Engine {
             'gazeta' => array('label'=>'Рівненська газета', 'hosts'=>array('gazeta.rv.ua','www.gazeta.rv.ua'), 'photo_callouts'=>false),
             'catalog' => array('label'=>'Каталог — зняття посилань', 'hosts'=>array('catalog.ogo.ua'), 'photo_callouts'=>false),
             'ustream' => array('label'=>'Ustream — видалення плеєрів і підписів', 'hosts'=>array('ustream.tv','www.ustream.tv'), 'photo_callouts'=>false),
+            'flash' => array('label'=>'Flash — видалення плеєрів', 'hosts'=>array(), 'photo_callouts'=>false),
             'editorial_urls' => array('label'=>'Погоджені рубрики — в теги', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'vybir_home' => array('label'=>'Вибір 2010 — головна → Рейтинги', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'woman_urls' => array('label'=>'Жіночий клуб — заміна URL', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
@@ -38,8 +39,11 @@ final class OGO_MC_Engine {
         );
     }
     public static function anchor_attributes($tag) {
-        if (!preg_match('~^<a(?=[\s/>])(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', $tag, $m)) return array();
-        preg_match_all('~([^\s=<>/]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+)))?~', substr($m[0], 2, -1), $attrs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL);
+        return self::tag_attributes($tag,'a');
+    }
+    public static function tag_attributes($tag,$name) {
+        if (!preg_match('~^<'.preg_quote($name,'~').'(?=[\s/>])(?:[^>"\']|"[^"]*"|\'[^\']*\')*>~i', $tag, $m)) return array();
+        preg_match_all('~([^\s=<>/]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+)))?~', substr($m[0], strlen($name)+1, -1), $attrs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL);
         return $attrs;
     }
     public static function html_tokens($content) {
@@ -273,6 +277,7 @@ final class OGO_MC_Engine {
             return OGO_MC_Source_Links::analyze($content,$config['hosts'][0],$config['link_action']==='attributes');
         }
         if (in_array($project,array('audit','external_audit','coverage_404'),true)) throw new InvalidArgumentException('Use the read-only audit engine');
+        if ($project === 'flash') { require_once __DIR__.'/flash.php'; return OGO_MC_Flash::analyze($content); }
         // Preserve comments, code and raw text verbatim. Mask length remains identical.
         $masked = preg_replace_callback('~<!--[\s\S]*?-->|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?</\1\s*>~i', function($m) { return str_repeat(' ', strlen($m[0])); }, $content);
         if ($project === 'ustream') { require_once __DIR__.'/ustream.php'; return OGO_MC_Ustream::analyze($content,$masked); }

@@ -2,6 +2,8 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.35.0](dist/ogo-cleaner-1.35.0.zip) додає «Flash — видалення плеєрів».
+
 [ZIP 1.34.0](dist/ogo-cleaner-1.34.0.zip) додає «Вибір 2010 — головна → Рейтинги».
 [CSV для Redirection](dist/ogo-vybir2010-301.csv) містить лише дві форми головної.
 
@@ -36,6 +38,7 @@ php tests/missing.php
 php tests/external.php
 php tests/source-links.php
 php tests/coverage.php
+php tests/flash.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```

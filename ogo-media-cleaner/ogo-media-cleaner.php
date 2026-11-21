@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.34.0
+ * Version: 1.35.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -14,7 +14,7 @@ require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.34.0';
+    public const VERSION = '1.35.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
@@ -113,7 +113,7 @@ final class OGO_Media_Cleaner {
             if (empty($s['run'])) wp_send_json_error('Спочатку почніть сканування.');
             if (($s['engine_version']??'')!==self::VERSION) wp_send_json_error('Після оновлення почніть нове сканування цього проєкту.');
             if (!$s['complete']) {
-                $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home'),true);
+                $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home','flash'),true);
                 $posts=$wpdb->get_results($wpdb->prepare(
                     "SELECT ID,post_content,post_modified_gmt,post_status FROM {$wpdb->posts} WHERE ID>%d AND ID<=%d AND post_type IN (".self::post_type_placeholders().") AND post_status IN ('publish','private','draft','pending','future') ORDER BY ID LIMIT 50",
                     array_merge(array($s['cursor'],$s['max']),self::post_types())
@@ -203,6 +203,7 @@ final class OGO_Media_Cleaner {
         $updating_attributes=($projects[$project]['link_action']??'')==='attributes';
         $vk_mode=$project==='vk';
         $ustream_mode=$project==='ustream';
+        $flash_mode=$project==='flash';
         $runs=$wpdb->get_col($wpdb->prepare("SELECT run_id FROM $t WHERE project=%s GROUP BY run_id ORDER BY MAX(id) DESC".($archived?'':' LIMIT 30'),$project));
         $operation_run=$s['run']??($runs[0]??'');
         $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):$operation_run;
@@ -219,7 +220,7 @@ final class OGO_Media_Cleaner {
         if ($unwrapping) { $count_label='посилань для зняття/знятих'; $row_action='Зняти'; }
         if ($updating_attributes) { $count_label='посилань для оновлення/оновлених'; $row_action='Оновити'; }
         if ($project==='legacy_missing' || $vk_mode || $project==='day') { $count_label='посилань для обробки/оброблених'; $row_action='Обробити'; }
-        if ($ustream_mode) { $count_label='елементів для видалення/видалених'; $row_action='Видалити елементів'; }
+        if ($ustream_mode || $flash_mode) { $count_label='елементів для видалення/видалених'; $row_action='Видалити елементів'; }
         if ($project==='gazeta') { $count_label='збігів для обробки/оброблених'; $row_action='Обробити збігів'; }
         $apply_selected='Очистити вибрані';
         $apply_all='Очистити всі готові';
@@ -236,6 +237,8 @@ final class OGO_Media_Cleaner {
         <h2><?php echo esc_html($projects[$project]['label']); ?></h2>
         <?php if ($archived): ?>
         <p>Виберіть попередній запуск у журналі, щоб переглянути зміни або відкотити очищення.</p>
+        <?php elseif ($flash_mode): ?>
+        <p>Видаляє Flash-плеєри у <code>object</code>, <code>embed</code> та <code>iframe</code>, що завантажує SWF. Розпізнає файли <code>.swf</code>, Flash MIME-тип і службові позначки Flash. Вставки з резервним текстом, іншим медіа чи неповною розміткою залишає для ручної перевірки.</p>
         <?php elseif ($ustream_mode): ?>
         <p>Видаляє закриті iframe з порожнім вмістом та src на точні домени <code>ustream.tv</code> / <code>www.ustream.tv</code>, шляхи <code>/embed/ID</code> або <code>/embed/recorded/ID</code>. Порядок атрибутів і стилі не заважають. Підтримує http, https та //.</p>
         <p>Видаляє стандартні посилання-підписи «Live streaming video by Ustream» та «Video streaming by Ustream» на головну Ustream. Прибирає br між видаленим плеєром і підписом, а також прості абзаци й блоки HTML/paragraph Gutenberg, що стали порожніми. Текст статей та інше відео зберігає. Нестандартні посилання, невпізнані плеєри й незакриті теги залишає для перевірки.</p>
