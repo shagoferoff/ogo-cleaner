@@ -59,9 +59,10 @@ final class OGO_MC_Site_Links {
         ));
         if ($wpdb->last_error) throw new RuntimeException('Не вдалося прочитати статті.');
         if (!$posts) { $state['complete']=true; return $state; }
+        $paid=OGO_MC_Paid_Posts::paid_ids(array_column($posts,'ID'));
         $rows=array();
         foreach ($posts as $post) {
-            list($links,$review)=OGO_MC_Site_Links_Engine::inspect($post->post_content);
+            list($links,$review)=OGO_MC_Site_Links_Engine::inspect($post->post_content,isset($paid[$post->ID]));
             foreach ($links as $link) $rows[]=array_merge(array($state['run'],$post->ID),array_values($link));
             $state['review']+=$review;
         }
@@ -108,7 +109,8 @@ final class OGO_MC_Site_Links {
             if ($mode==='start') {
                 $max=$wpdb->get_var("SELECT MAX(ID) FROM {$wpdb->posts}");
                 if ($wpdb->last_error) throw new RuntimeException('Не вдалося визначити межу сканування.');
-                $state=array('run'=>wp_generate_uuid4(),'cursor'=>0,'max'=>(int)$max,'scanned'=>0,'review'=>0,'complete'=>false,'started'=>current_time('mysql'));
+                $state=array('run'=>wp_generate_uuid4(),'cursor'=>0,'max'=>(int)$max,'scanned'=>0,'review'=>0,'complete'=>false,
+                    'started'=>current_time('mysql'),'paid_revision'=>OGO_MC_Paid_Posts::revision());
                 self::save($state);
                 array_unshift($history,$state['run']);
                 if (!update_option(self::ACTION.'_history',$history,false)) throw new RuntimeException('Не вдалося зберегти запуск у журналі.');
@@ -117,7 +119,11 @@ final class OGO_MC_Site_Links {
                 if (!self::valid_run($run) || ($history[0]??'')!==$run) throw new RuntimeException('Відкрийте поточну ревізію.');
                 $state=self::state($run);
                 if (!$state) throw new RuntimeException('Поточний запуск недоступний.');
-                if (!$state['complete']) { $state=self::scan($state); self::save($state); }
+                if (!$state['complete']) {
+                    if (($state['paid_revision']??'')!==OGO_MC_Paid_Posts::revision()) throw new RuntimeException('Список платних статей оновився. Почніть нову ревізію.');
+                    $state=self::scan($state);
+                    self::save($state);
+                }
             }
         } catch (Throwable $e) { $error=$e->getMessage(); }
         finally { if (get_option('ogo_mc_lock')===$lock) delete_option('ogo_mc_lock'); }
@@ -195,6 +201,7 @@ final class OGO_MC_Site_Links {
             $signals=array();
             if ($r['ad_marker']) $signals[]='«На правах реклами»';
             if (in_array('sponsored',explode(' ',$r['rel_tokens']),true)) $signals[]='rel=sponsored';
+            if ($r['paid'] && !$signals) $signals[]='Платна стаття';
         ?>
         <tr><td><?php if ($edit): ?><a href="<?php echo esc_url($edit); ?>"><?php endif; ?><?php echo esc_html(get_the_title($id)?:'Стаття '.$id); ?><?php if ($edit): ?></a><?php endif; ?></td>
         <td style="overflow-wrap:anywhere"><code><?php echo esc_html($r['target_url']); ?></code><br><?php echo esc_html($r['anchor_text']); ?></td>

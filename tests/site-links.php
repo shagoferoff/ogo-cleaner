@@ -21,10 +21,14 @@ list($rows)=OGO_MC_Site_Links_Engine::inspect($normal.'<p>«<strong>На пра�
 site_links_assert($rows[0]['paid']===1 && $rows[0]['ad_marker']===1 && $rows[0]['closed']===0,'Visible footer sets article-level advertising without changing rel status');
 list($rows)=OGO_MC_Site_Links_Engine::inspect($nofollow.'<p><strong>На правах реклами.</strong></p>');
 site_links_assert($rows[0]['ad_marker']===1,'A footer immediately after inline text still has a block boundary');
-foreach (array('<!-- На правах реклами -->','<pre>На правах реклами</pre>','<p>На правах реклами</p><p>Подальший текст.</p>','<p>Редакція обговорила позначку «На правах реклами».</p>') as $suffix) {
+foreach (array('<!-- На правах реклами -->','<pre>На правах реклами</pre>','<p>Редакція обговорила позначку «На правах реклами».</p>') as $suffix) {
     list($rows)=OGO_MC_Site_Links_Engine::inspect($normal.$suffix);
-    site_links_assert($rows[0]['paid']===0,'Ignore hidden or non-final marker');
+    site_links_assert($rows[0]['paid']===0,'Ignore hidden markers and mentions in editorial prose');
 }
+list($rows)=OGO_MC_Site_Links_Engine::inspect('<p>На правах реклами</p>'.$normal.'<p>Подальший текст.</p>');
+site_links_assert($rows[0]['paid']===1 && $rows[0]['ad_marker']===1,'A visible marker can precede other paragraphs');
+list($rows)=OGO_MC_Site_Links_Engine::inspect($normal,true);
+site_links_assert($rows[0]['paid']===1 && $rows[0]['ad_marker']===0 && $rows[0]['closed']===0,'Paid register does not change rel or invent a disclosure');
 list($rows,$review)=OGO_MC_Site_Links_Engine::inspect('<a href="https://example.org/no-close">bad');
 site_links_assert(!$rows && $review===1,'Incomplete HTML does not contaminate the counts');
 site_links_assert(!isset(OGO_MC_External_Engine::extract($normal)[0]['rel']),'Keep the old Miralinks row shape');

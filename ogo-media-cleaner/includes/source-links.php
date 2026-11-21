@@ -34,6 +34,13 @@ final class OGO_MC_Source_Links {
         'ubr.ua','glavcom.ua','fchoscha.inf.ua','obozrevatel.com','champion.com.ua','galinfo.com.ua','opogode.ua','prostobank.ua',
         'rbc.ua','zn.ua','bbc.co.uk','meteoprog.ua','moz.gov.ua','ua.for-ua.com','nashigroshi.org','dpsu.gov.ua',
     );
+    private const FOURTH_BATCH=array(
+        'my.rv.ua','sites.google.com','ukr.lb.ua','1tv.com.ua','mon.gov.ua','privatbank.ua','risu.org.ua','tvi.ua',
+        'cnaprv.gov.ua','forms.gle','futsal.sport.ua','ukranews.com','vidomosti-ua.com','eurointegration.com.ua','focus.ua',
+        'oblrada.rv.ua','rivne.karabas.com','rv.npu.gov.ua','ve.com.ua','hromadske.tv','rp5.ua','te.20minut.ua','wz.lviv.ua',
+        'dubno.com.ua','lvtest.org.ua','petition.president.gov.ua','rada.gov.ua','vgolos.com.ua','depo.ua','news.bigmir.net',
+        'rivnerada.gov.ua','slide.com','testportal.gov.ua',
+    );
     private static function matches_host($tag,$domain) {
         $info=OGO_MC_Engine::href_info($tag);
         $parts=$info['parts']??null;
@@ -97,15 +104,17 @@ final class OGO_MC_Source_Links {
     public static function batch($content,$batch) {
         require_once __DIR__.'/external-engine.php';
         require_once __DIR__.'/site-links-engine.php';
-        if (($batch!==3 && stripos($content,'<a')===false) || OGO_MC_Site_Links_Engine::ad_marker($content)) {
+        $review_embeds=$batch>=3;
+        if ((!$review_embeds && stripos($content,'<a')===false) || OGO_MC_Site_Links_Engine::ad_marker($content,true)) {
             return array('after'=>$content,'total'=>0,'removed'=>0,'review'=>0,'fragments'=>array(),'summary'=>'');
         }
-        $domains=array(1=>self::FIRST_BATCH,2=>self::SECOND_BATCH,3=>array_fill_keys(self::THIRD_BATCH,false))[$batch];
+        $domains=array(1=>self::FIRST_BATCH,2=>self::SECOND_BATCH,3=>array_fill_keys(self::THIRD_BATCH,false),
+            4=>array_fill_keys(self::FOURTH_BATCH,false))[$batch];
         $tokens=null;
         $embeds=0;
-        if ($batch===3) {
+        if ($review_embeds) {
             require_once __DIR__.'/source-embeds.php';
-            list($tokens,$embeds)=OGO_MC_Source_Embeds::inspect($content,self::THIRD_BATCH);
+            list($tokens,$embeds)=OGO_MC_Source_Embeds::inspect($content,array_keys($domains));
         }
         $result=self::edit_links($content,function($tag) use ($domains) {
             $href=OGO_MC_Engine::href_info($tag);
@@ -117,7 +126,7 @@ final class OGO_MC_Source_Links {
             $rel=explode(' ',$attributes['rel']);
             return !in_array('sponsored',$rel,true) && OGO_MC_Site_Links_Engine::is_closed($rel)===$domains[$domain];
         },true,true,null,$tokens);
-        return $batch===3?self::add_embed_review($result,$embeds,'Вставки для ручної перевірки'):$result;
+        return $review_embeds?self::add_embed_review($result,$embeds,'Вставки для ручної перевірки'):$result;
     }
 
     public static function miralinks($content,$targets) {

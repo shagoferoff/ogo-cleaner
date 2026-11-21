@@ -153,3 +153,22 @@ batch_check($www,str_replace('">','" target="_blank" rel="nofollow noopener">',$
 $unclosed='<a href="'.$url.'">Незакрите';
 batch_check($unclosed,$unclosed,0,1,$project);
 echo "Passed third-batch exact domains, ordinary links, embed review, conflicts and repeat-run checks.\n";
+
+$project='source_batch_4';
+$fourth_open=explode(' ','my.rv.ua sites.google.com ukr.lb.ua 1tv.com.ua mon.gov.ua privatbank.ua risu.org.ua tvi.ua cnaprv.gov.ua forms.gle futsal.sport.ua ukranews.com vidomosti-ua.com eurointegration.com.ua focus.ua oblrada.rv.ua rivne.karabas.com rv.npu.gov.ua ve.com.ua hromadske.tv rp5.ua te.20minut.ua wz.lviv.ua dubno.com.ua lvtest.org.ua petition.president.gov.ua rada.gov.ua vgolos.com.ua depo.ua news.bigmir.net rivnerada.gov.ua slide.com testportal.gov.ua');
+foreach ($fourth_open as $host) {
+    $tag='<a href="https://'.$host.'/x">Джерело</a>';
+    batch_check($tag,str_replace('">','" target="_blank" rel="nofollow noopener">',$tag),1,0,$project);
+    $closed_tag='<a href="https://'.$host.'/x" rel="nofollow">Джерело</a>';
+    batch_check($closed_tag,$closed_tag,0,0,$project);
+}
+$link='<a href="https://www.slide.com/x" rel="noreferrer">Слайд</a>';
+$embed='<object><param name="movie" value="https://slide.com/player">'.$link.'</object>';
+$after=str_replace('rel="noreferrer"','rel="nofollow noopener noreferrer" target="_blank"',$link);
+batch_check($link.$embed,$after.$embed,1,1,$project);
+batch_check($embed,$embed,0,1,$project);
+$paid='<p><em>На правах реклами</em></p>'.$link.'<p>Інший абзац</p>';
+batch_check($paid,$paid,0,0,$project);
+$outside='<a href="https://lb.ua/x">Інший домен</a><a href="https://slide.com.example.org/x">Інший сайт</a>';
+batch_check($outside,$outside,0,0,$project);
+echo "Passed fourth-batch domains, embed review, existing status and paid article exclusion.\n";

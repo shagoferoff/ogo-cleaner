@@ -26,12 +26,12 @@ function batch_fixture($html,$status='publish',$type='post',$title='Source batch
 function batch_assert($ok,$message) {
     if (!$ok) throw new RuntimeException($message);
 }
-$hosts=array(1=>'pravda.com.ua',2=>'suspilne.media',3=>'fakty.ictv.ua');
+$hosts=array(1=>'pravda.com.ua',2=>'suspilne.media',3=>'fakty.ictv.ua',4=>'slide.com');
 $batch=(int)getenv('OGO_TEST_SOURCE_BATCH')?:1;
 $batch_project='source_batch_'.$batch;
 $host=$hosts[$batch];
 $plain='<p><a href="https://'.$host.'/test" rel="noreferrer">Джерело</a> <a href="https://t.me/channel/1">Telegram</a> <a href="https://facebook.com/video/2">Facebook</a></p>';
-$embed=$batch===3?'<object><param name="movie" value="https://'.$host.'/test">'.$plain.'</object>':'';
+$embed=$batch>=3?'<object><param name="movie" value="https://'.$host.'/test">'.$plain.'</object>':'';
 $source=$plain.$embed;
 $expected=str_replace('rel="noreferrer"','rel="nofollow noopener noreferrer" target="_blank"',$plain).$embed;
 $paid=$source.'<p>На правах реклами.</p>';
@@ -47,7 +47,28 @@ if ($embed!=='') {
     $fixtures[]=$plain_id;
 }
 update_post_meta($article,'anons',$source);
+$previous_paid=OGO_MC_Paid_Posts::records();
 try {
+    if ($batch===4) {
+        $imported=batch_fixture($plain,'publish','post','Source batch imported fixture');
+        $marked=batch_fixture($plain,'publish','post','Source batch marked fixture');
+        $fixtures[]=$imported;
+        $fixtures[]=$marked;
+        update_post_meta($marked,'paid_article','1');
+        $upload=fopen('php://temp','w+');
+        fwrite($upload,"\xEF\xBB\xBFПублікація,Решта\nhttps://ogo.ua/imported-fixture/,text\nhttp://www.ogo.ua/imported-fixture,duplicate\n");
+        rewind($upload);
+        batch_assert(OGO_MC_Paid_Posts::read_csv($upload)===array('/imported-fixture'),'Read publication column and normalize duplicate URLs');
+        fclose($upload);
+        $date=substr(get_post($imported)->post_date,0,10);
+        $legacy='/articles/view/'.$date.'/'.$imported.'.html';
+        batch_assert(OGO_MC_Paid_Posts::resolve($legacy)===$imported && OGO_MC_Paid_Posts::resolve('/articles/view/2001-01-01/'.$imported.'.html')===0,'Resolve the dated legacy article and reject mismatched IDs');
+        update_option('ogo_mc_paid_articles',array($legacy=>$imported,'/unresolved-fixture'=>0),false);
+        $paid_report=OGO_MC_Paid_Posts::report();
+        $needs_label=array_column($paid_report['missing'],'id');
+        batch_assert(in_array($imported,$needs_label,true) && in_array($marked,$needs_label,true)
+            && in_array('/unresolved-fixture',$paid_report['unresolved'],true),'Report flags both signals for a future text disclosure');
+    }
     $state=batch_ajax('start')['state']; $run=$state['run'];
     do { $state=batch_ajax('scan',$run)['state']; } while (!$state['complete']);
     global $wpdb;
@@ -66,11 +87,24 @@ try {
         batch_assert(strpos($html,'Source batch mixed fixture')!==false && strpos($html,'Source batch embed fixture')!==false
             && strpos($html,'Source batch plain fixture')===false,'The manual review filter shows only marked articles');
     }
+    if ($batch===4) {
+        foreach (array($imported,$marked) as $id) {
+            batch_assert(!$wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE run_id=%s AND post_id=%d",$run,$id)),'Paid posts have no ready edit');
+        }
+        $plain_row=$wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE run_id=%s AND post_id=%d",$run,$plain_id));
+        update_post_meta($plain_id,'paid_article','1');
+        batch_ajax('apply',$run,array($plain_row));
+        batch_assert(get_post($plain_id)->post_content===$plain && $wpdb->get_var($wpdb->prepare("SELECT status FROM $table WHERE id=%d",$plain_row))==='conflict','Late paid marker blocks an already prepared edit');
+    }
     batch_ajax('apply',$run,array($row->id));
     batch_assert(get_post($article)->post_content===$expected && get_post_meta($article,'anons',true)===$source,'Apply preserves the rest of the content');
     batch_ajax('restore',$run,array($row->id));
     batch_assert(get_post($article)->post_content===$source,'Rollback restores the source HTML');
 } finally {
+    if ($batch===4) {
+        if ($previous_paid) update_option('ogo_mc_paid_articles',$previous_paid,false);
+        else delete_option('ogo_mc_paid_articles');
+    }
     foreach ($fixtures as $id) wp_delete_post($id,true);
 }
 echo "Passed WordPress $batch_project preview, published scope, advertising exclusion, apply and rollback checks.\n";

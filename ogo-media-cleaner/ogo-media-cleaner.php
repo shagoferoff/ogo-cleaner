@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.43.0
+ * Version: 1.44.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -14,8 +14,9 @@ require_once __DIR__ . '/includes/audit.php';
 require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 require_once __DIR__ . '/includes/site-links.php';
+require_once __DIR__ . '/includes/paid-posts.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.43.0';
+    public const VERSION = '1.44.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types($project='') {
@@ -62,6 +63,7 @@ final class OGO_Media_Cleaner {
         OGO_MC_Audit::init();
         OGO_MC_External::init();
         OGO_MC_Site_Links::init();
+        OGO_MC_Paid_Posts::init();
         OGO_MC_Coverage::init();
         add_action('admin_menu', function(){ add_management_page('OGO Cleaner','OGO Cleaner','edit_others_posts','ogo-media-cleaner',array(__CLASS__,'page')); });
         add_action('admin_init',function(){ if (current_user_can('manage_options') && get_option('ogo_mc_schema')!=='1.3.1') self::activate(); });
@@ -81,7 +83,7 @@ final class OGO_Media_Cleaner {
             <input type="hidden" name="page" value="ogo-media-cleaner">
             <label>Проєкт / операція <select name="project" required>
                 <?php if (OGO_MC_Engine::is_archived($project)): ?><option value="" selected disabled>Виберіть операцію</option><?php endif; ?>
-                <?php foreach ($projects as $key=>$config): if (OGO_MC_Engine::is_archived($key)) continue; ?>
+                <?php foreach ($projects as $key=>$config): if (OGO_MC_Engine::is_archived($key) || ($key==='paid_posts' && !current_user_can('manage_options'))) continue; ?>
                     <option value="<?php echo esc_attr($key); ?>" <?php selected($project,$key); ?>><?php echo esc_html($config['label']); ?></option>
                 <?php endforeach; ?>
             </select></label> <button class="button">Відкрити</button>
@@ -103,7 +105,10 @@ final class OGO_Media_Cleaner {
         $project=sanitize_key(wp_unslash($_POST['project']??'media'));
         if (!self::valid_project($project)) wp_send_json_error('Невідомий проєкт.');
         if (OGO_MC_Engine::is_archived($project) && $mode!=='restore') wp_send_json_error('Для завершеного очищення доступні журнал і відкат.',403);
-        if (in_array($project,array('audit','external_audit','coverage_404','site_links'),true)) wp_send_json_error('Ревізія лише складає звіт. Використайте окремі кнопки сканування.');
+        if (in_array($project,array('audit','external_audit','coverage_404','site_links','paid_posts'),true)) wp_send_json_error('Ревізія лише складає звіт. Використайте окремі кнопки сканування.');
+        if ($project==='source_batch_4' && $mode!=='restore' && !array_filter(OGO_MC_Paid_Posts::records())) {
+            wp_send_json_error('Спочатку імпортуйте CSV у розділі «Платні статті».');
+        }
         if (get_option('ogo_mc_schema')!=='1.3.1') wp_send_json_error('Не вдалося оновити таблицю журналу. Очищення не запущено.');
         $s=self::state($project);
         $miralinks=$project==='miralinks_unwrap';
@@ -140,8 +145,13 @@ final class OGO_Media_Cleaner {
                     array_merge(array($s['cursor'],$s['max']),self::post_types($project),array($limit))
                 ));
                 if ($wpdb->last_error) wp_send_json_error('Не вдалося прочитати матеріали.');
+                $protect_paid=OGO_MC_Paid_Posts::protects($project);
+                try { $paid=$protect_paid?OGO_MC_Paid_Posts::paid_ids(array_column($posts,'ID')):array(); }
+                catch (RuntimeException $e) { wp_send_json_error($e->getMessage()); }
                 foreach ($posts as $p) {
-                    if ($miralinks) {
+                    if ($protect_paid && (isset($paid[$p->ID]) || OGO_MC_Site_Links_Engine::ad_marker($p->post_content,true))) {
+                        $a=array('total'=>0);
+                    } elseif ($miralinks) {
                         require_once __DIR__.'/includes/source-links.php';
                         try { $a=OGO_MC_Source_Links::miralinks($p->post_content,OGO_MC_External::cleanup_targets($s['audit_run'],$p->ID)); }
                         catch (RuntimeException $e) { wp_send_json_error($e->getMessage()); }
@@ -182,6 +192,13 @@ final class OGO_Media_Cleaner {
         if (!$p || !current_user_can('edit_post',$r->post_id)) { $wpdb->update($t,array('status'=>'conflict','message'=>'Матеріал відсутній або недостатньо прав.'),array('id'=>$r->id)); return; }
         require_once ABSPATH.'wp-admin/includes/post.php';
         if (wp_check_post_lock($r->post_id)) { $wpdb->update($t,array('status'=>'conflict','message'=>'Матеріал відкритий іншим редактором.'),array('id'=>$r->id)); return; }
+        if ($mode==='apply' && OGO_MC_Paid_Posts::protects($r->project)) {
+            try { $paid=OGO_MC_Paid_Posts::paid_ids(array($r->post_id)); }
+            catch (RuntimeException $e) { wp_send_json_error($e->getMessage()); }
+            if ($paid || OGO_MC_Site_Links_Engine::ad_marker($p->post_content,true)) {
+                $wpdb->update($t,array('status'=>'conflict','message'=>'Платна стаття. Посилання збережено.'),array('id'=>$r->id)); return;
+            }
+        }
         if ($mode==='apply' && in_array($r->project??'',array('legacy_missing','legacy_urls','nashregion_urls','woman_urls'),true)) {
             require_once __DIR__.'/includes/legacy.php';
             OGO_MC_Legacy::clear_cache();
@@ -218,6 +235,7 @@ final class OGO_Media_Cleaner {
         if (!current_user_can('edit_others_posts')) return;
         if (sanitize_key(wp_unslash($_GET['project']??''))==='external_audit') { OGO_MC_External::page(); return; }
         if (sanitize_key(wp_unslash($_GET['project']??''))==='site_links') { OGO_MC_Site_Links::page(); return; }
+        if (sanitize_key(wp_unslash($_GET['project']??''))==='paid_posts') { OGO_MC_Paid_Posts::page(); return; }
         if (sanitize_key(wp_unslash($_GET['project']??''))==='coverage_404') { OGO_MC_Coverage::page(); return; }
         if (sanitize_key(wp_unslash($_GET['project']??''))==='audit') { OGO_MC_Audit::page(); return; }
         if (get_option('ogo_mc_schema')!=='1.3.1') { echo '<div class="notice notice-error"><p>Не вдалося оновити таблицю журналу. Очищення недоступне. Перевірте права користувача бази на зміну таблиць.</p></div>'; return; }
@@ -246,7 +264,7 @@ final class OGO_Media_Cleaner {
         $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):$operation_run;
         $page=max(1,absint($_GET['paged']??1));
         $social_mode=in_array($project,array('telegram_urls','facebook_urls'),true);
-        $review_filter_available=$social_mode || $project==='source_batch_3';
+        $review_filter_available=$social_mode || in_array($project,array('source_batch_3','source_batch_4'),true);
         $review_only=$review_filter_available && ($_GET['review']??'')==='1';
         $review_filter=$review_only?' AND review>0':'';
         $rows=$wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE run_id=%s AND project=%s$review_filter ORDER BY id LIMIT 20 OFFSET %d",$run,$project,($page-1)*20));
@@ -335,6 +353,14 @@ final class OGO_Media_Cleaner {
         <p>Вбудовані матеріали й посилання з виявленими ознаками реклами пропускає. URL, анкор та інші значення <code>rel</code> зберігаються.</p>
         <?php elseif ($project==='source_batch_3'): ?>
         <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на 32 домени з третьої партії ревізії у статтях без рекламної позначки. Виявлені вставки позначає для ручної перевірки. Звичайні посилання в тій самій статті можна оновити окремо.</p>
+        <?php elseif ($project==='source_batch_4'): ?>
+        <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на 33 домени. Розпізнані вставки, зокрема зі <code>slide.com</code>, позначає для ручної перевірки. Платні статті пропускає.</p>
+        <?php $paid_records=OGO_MC_Paid_Posts::records(); ?>
+        <?php if (!array_filter($paid_records)): ?>
+        <p>Перед скануванням імпортуйте CSV у розділі <a href="<?php echo esc_url(add_query_arg(array('page'=>'ogo-media-cleaner','project'=>'paid_posts'),admin_url('tools.php'))); ?>">Платні статті</a>.</p>
+        <?php elseif (in_array(0,$paid_records,true)): ?>
+        <p>Незіставлених адрес платних статей: <?php echo count(array_keys($paid_records,0,true)); ?>. Перед застосуванням перевірте їх у розділі «Платні статті».</p>
+        <?php endif; ?>
         <?php elseif ($social_mode): ?>
         <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на <code><?php echo esc_html($projects[$project]['hosts'][0]); ?></code> (також із <code>www</code>) у статтях без рекламної позначки. Вбудовані пости й відео позначає для ручної перевірки. Звичайні посилання в тій самій статті можна оновити окремо від вставки.</p>
         <?php elseif ($updating_attributes): ?>

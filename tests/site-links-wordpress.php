@@ -30,6 +30,11 @@ $paid=$closed.'<p><strong>На правах реклами.</strong></p>';
 $first=inventory_post('publish',$open.$open.$closed);
 $second=inventory_post('publish',$paid);
 $draft=inventory_post('draft',$open);
+$registered=inventory_post('publish',$open);
+$field=inventory_post('publish',$open);
+update_post_meta($field,'paid_article','1');
+$previous_paid=OGO_MC_Paid_Posts::records();
+update_option('ogo_mc_paid_articles',$previous_paid+array('/inventory-fixture'=>$registered),false);
 update_post_meta($first,'anons','<a href="https://ignore-anons.invalid/">Анонс</a>');
 $previous=OGO_MC_External::state();
 $admin=get_current_user_id();
@@ -47,9 +52,13 @@ try {
     global $wpdb;
     $table=$wpdb->prefix.'ogo_site_links';
     $rows=$wpdb->get_results($wpdb->prepare("SELECT * FROM $table WHERE run_id=%s AND domain=%s ORDER BY post_id,closed",$run,$domain),ARRAY_A);
-    inventory_check(count($rows)===3 && (int)$rows[0]['link_count']===2 && (int)$rows[0]['new_tab']===1 && (int)$rows[0]['closed']===0,'One URL can be represented in different rel states');
+    inventory_check(count($rows)===5 && (int)$rows[0]['link_count']===2 && (int)$rows[0]['new_tab']===1 && (int)$rows[0]['closed']===0,'One URL can be represented in different rel states');
     $paid_row=array_values(array_filter($rows,function($row) use ($second){return (int)$row['post_id']===(int)$second;}));
     inventory_check(count($paid_row)===1 && (int)$paid_row[0]['paid']===1 && (int)$paid_row[0]['ad_marker']===1,'Footer is surfaced for published source: '.json_encode(array_column($rows,'ad_marker')));
+    $classified=array_column($rows,null,'post_id');
+    foreach (array($registered,$field) as $id) {
+        inventory_check((int)$classified[$id]['paid']===1 && (int)$classified[$id]['ad_marker']===0 && (int)$classified[$id]['closed']===0,'CSV and field mark paid without changing rel or content');
+    }
     $_GET=array('project'=>'site_links','run'=>$run,'domain'=>$domain,'paid'=>'1','closed'=>'1');
     ob_start(); OGO_Media_Cleaner::page(); $html=ob_get_clean();
     inventory_check(strpos($html,'На правах реклами')!==false && strpos($html,'post='.$second)!==false && strpos($html,'post='.$first)===false,'Status filters open only the matching article');
@@ -59,6 +68,8 @@ try {
     inventory_check(!site_links_request('start')['success'],'Unauthorized visitors cannot start the audit');
 } finally {
     wp_set_current_user($admin);
-    foreach (array($first,$second,$draft) as $id) wp_delete_post($id,true);
+    if ($previous_paid) update_option('ogo_mc_paid_articles',$previous_paid,false);
+    else delete_option('ogo_mc_paid_articles');
+    foreach (array($first,$second,$draft,$registered,$field) as $id) wp_delete_post($id,true);
 }
 echo "Passed WordPress site audit grouping, filters, permissions and read-only scope checks.\n";
