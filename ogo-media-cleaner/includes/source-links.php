@@ -118,27 +118,28 @@ final class OGO_MC_Source_Links {
         return $result;
     }
 
-    public static function telegram($content) {
-        if (stripos($content,'t.me')===false && stripos($content,'telegram')===false && strpos($content,'&#')===false) {
+    public static function social($content,$provider,$domain) {
+        $markers=$provider==='facebook'?'facebook|fb\.watch|fb[-:]':'t\.me|telegram|tgme_';
+        if (!preg_match('~'.$markers.'|&#~i',$content)) {
             return array('after'=>$content,'total'=>0,'removed'=>0,'review'=>0,'fragments'=>array(),'summary'=>'');
         }
         require_once __DIR__.'/external-engine.php';
         require_once __DIR__.'/site-links-engine.php';
-        require_once __DIR__.'/telegram-links.php';
-        list($tokens,$embeds)=OGO_MC_Telegram_Links::inspect($content);
+        require_once __DIR__.'/social-links.php';
+        list($tokens,$embeds)=OGO_MC_Social_Links::inspect($content,$provider);
         $paid=OGO_MC_Site_Links_Engine::ad_marker($content);
-        $result=self::edit_links($content,function($tag) use ($paid) {
+        $result=self::edit_links($content,function($tag) use ($paid,$domain) {
             if ($paid) return false;
             $href=OGO_MC_Engine::href_info($tag);
             $link=$href?OGO_MC_External_Engine::classify($href['raw']):null;
-            if (!$link || $link['kind']==='review' || OGO_MC_Site_Links_Engine::domain($link['domain'])!=='t.me') return false;
+            if (!$link || $link['kind']==='review' || OGO_MC_Site_Links_Engine::domain($link['domain'])!==$domain) return false;
             $attributes=OGO_MC_External_Engine::link_attributes($tag);
             return !OGO_MC_Site_Links_Engine::is_closed(explode(' ',$attributes['rel']));
         },true,true,null,$tokens);
         $result['blocking_review']=$result['review'];
         $result['total']+=$embeds;
         $result['review']+=$embeds;
-        if ($embeds) $result['summary'].=' Вставки Telegram для ручної перевірки: '.$embeds.'.';
+        if ($embeds) $result['summary'].=' Вставки '.ucfirst($provider).' для ручної перевірки: '.$embeds.'.';
         return $result;
     }
 

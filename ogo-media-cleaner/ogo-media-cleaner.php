@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.40.0
+ * Version: 1.41.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -15,11 +15,11 @@ require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 require_once __DIR__ . '/includes/site-links.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.40.0';
+    public const VERSION = '1.41.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types($project='') {
-        return in_array($project,array('source_batch_1','telegram_urls','miralinks_unwrap'),true)?array('post'):array('post','page','rivnenschina','dovidka','phogo','press');
+        return in_array($project,array('source_batch_1','telegram_urls','facebook_urls','miralinks_unwrap'),true)?array('post'):array('post','page','rivnenschina','dovidka','phogo','press');
     }
     private static function post_type_placeholders($project='') { return implode(',', array_fill(0, count(self::post_types($project)), '%s')); }
     public static function activate() {
@@ -129,7 +129,7 @@ final class OGO_Media_Cleaner {
             }
             if (!$s['complete']) {
                 $block_on_review=isset(OGO_MC_Engine::projects()[$project]['link_action']) || in_array($project,array('legacy_missing','legacy_urls','day','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home','flash'),true);
-                $site_batch=in_array($project,array('source_batch_1','telegram_urls'),true);
+                $site_batch=in_array($project,array('source_batch_1','telegram_urls','facebook_urls'),true);
                 $statuses=$site_batch?"'publish'":"'publish','private','draft','pending','future'";
                 $limit=$site_batch?200:50;
                 $posts=$miralinks?OGO_MC_External::cleanup_posts($s['audit_run'],$s['cursor'],$s['max'],$limit):$wpdb->get_results($wpdb->prepare(
@@ -242,7 +242,8 @@ final class OGO_Media_Cleaner {
         if ($miralinks && isset($_GET['audit_run']) && !$matching_audit) $operation_run='';
         $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):$operation_run;
         $page=max(1,absint($_GET['paged']??1));
-        $review_only=$project==='telegram_urls' && ($_GET['review']??'')==='1';
+        $social_mode=in_array($project,array('telegram_urls','facebook_urls'),true);
+        $review_only=$social_mode && ($_GET['review']??'')==='1';
         $review_filter=$review_only?' AND review>0':'';
         $rows=$wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE run_id=%s AND project=%s$review_filter ORDER BY id LIMIT 20 OFFSET %d",$run,$project,($page-1)*20));
         $labels=array('ready'=>'Готово до очищення','review'=>'Ручна перевірка','done'=>'Очищено','restored'=>'Відновлено','conflict'=>'Пропущено: конфлікт');
@@ -325,8 +326,8 @@ final class OGO_Media_Cleaner {
         <?php elseif ($project==='source_batch_1'): ?>
         <p>У 31 погодженого домену додає <code>target="_blank"</code> і <code>nofollow noopener</code> для посилань у тих самих категоріях, що й у надісланих рядках ревізії. Для <code>roe.vsei.ua</code> і <code>suspilne.media</code> обробляє лише вже закриті посилання. Враховує точний домен і його варіант з <code>www</code>.</p>
         <p>Telegram, Facebook, вбудовані матеріали та посилання з виявленими ознаками реклами пропускає. URL, анкор та інші значення <code>rel</code> зберігаються.</p>
-        <?php elseif ($project==='telegram_urls'): ?>
-        <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на <code>t.me</code> у статтях без рекламної позначки. Виявлені вставки Telegram відмічає для ручної перевірки. Звичайні посилання в тій самій статті можна оновити окремо від вставки.</p>
+        <?php elseif ($social_mode): ?>
+        <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на <code><?php echo esc_html($projects[$project]['hosts'][0]); ?></code> (також із <code>www</code>) у статтях без рекламної позначки. Вбудовані пости й відео позначає для ручної перевірки. Звичайні посилання в тій самій статті можна оновити окремо від вставки.</p>
         <?php elseif ($updating_attributes): ?>
         <p>Встановлює <code>target="_blank"</code> і додає <code>nofollow noopener</code> до <code>rel</code> посилань на <code><?php echo esc_html($projects[$project]['hosts'][0]); ?></code> та піддомени. Інші значення <code>rel</code>, URL і текст посилання зберігаються.</p>
         <?php elseif ($project==='legacy_urls'): ?>
@@ -339,7 +340,7 @@ final class OGO_Media_Cleaner {
         <p>Видаляє окремі текстові рекомендації, «За матеріалами…» та впізнані запрошення «Продовження читайте/переглядайте на сайті…» з посиланнями <code>day.ogo.ua</code>. У змістовних реченнях знімає тільки теги a, зберігаючи текст та оформлення. Підтримує числові й текстові назви .html, жирний текст і переноси всередині посилань. Вкладені посилання видаляє лише у цілому впізнаному фрагменті, якщо всі вони належать старому проєкту. Адреси <code>/articles/view/…</code> виправляйте через окрему заміну URL. Матеріали з необробленими посиланнями залишаються для ручної перевірки.</p>
         <?php endif; ?>
         <?php if (!$archived): ?>
-        <?php if (in_array($project,array('source_batch_1','telegram_urls'),true) || $miralinks): ?>
+        <?php if ($project==='source_batch_1' || $social_mode || $miralinks): ?>
         <p>Область — текст опублікованих статей. Під час сканування створюється попередній перегляд.</p>
         <?php else: ?>
         <p>Область: post_content типів <code><?php echo esc_html(implode(', ',self::post_types())); ?></code>, включно з чернетками та запланованими. Меню, віджети, метаполя й файли не змінює. Сканування нічого не змінює.</p>
@@ -363,7 +364,7 @@ final class OGO_Media_Cleaner {
         <p>Відкат працює для запуску, вибраного у звіті. Зміни виконуються порціями до 20 матеріалів. Відкат пропускає матеріали з подальшими правками.</p>
         <p><strong>Після очищення/відкату очистіть кеш сайту та CDN, якщо вони використовуються.</strong> Модуль скидає кеш записів WordPress; сторонній кеш може зберігати стару сторінку.</p>
         <h2>Звіт і журнал</h2>
-        <?php if ($project==='telegram_urls' && $run!==''): ?>
+        <?php if ($social_mode && $run!==''): ?>
         <p><a class="button" href="<?php echo esc_url(add_query_arg(array('page'=>'ogo-media-cleaner','project'=>$project,'run'=>$run,'review'=>$review_only?'0':'1'),admin_url('tools.php'))); ?>"><?php echo $review_only?'Показати всі матеріали':'Лише матеріали для ручної перевірки'; ?></a></p>
         <?php endif; ?>
         <?php foreach (self::stats($run,$project) as $st) echo '<p>'.esc_html(($labels[$st['status']]??$st['status']).': '.$st['materials'].' матеріалів; '.$count_label.': '.$st['links'].'; для перевірки: '.$st['review']).'</p>'; ?>

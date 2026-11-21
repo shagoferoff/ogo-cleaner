@@ -6,7 +6,7 @@ const config = project => ({
   project, url:'/wp-admin/admin-ajax.php', nonce:'test-nonce', run:'current-run',
   currentRun:'current-run', hasRun:true, complete:true,
   vkMode:project==='vk', unwrapping:['segodnya','miralinks_unwrap'].includes(project),
-  updatingAttributes:['tsn','korrespondent','source_batch_1','telegram_urls'].includes(project),
+  updatingAttributes:['tsn','korrespondent','source_batch_1','telegram_urls','facebook_urls'].includes(project),
   replacing:['day_urls','legacy_urls','dossier_urls','horoscope_urls','garden_urls','pets_urls','nashregion_urls','dim_urls','woman_urls','editorial_urls','vybir_home'].includes(project)
 });
 const response = (complete=true,remaining=0) => ({success:true,data:{state:{complete,scanned:50},stats:[],remaining}});
@@ -36,7 +36,7 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
   return {requests,prompts,alerts,redirect,button,progress:elements.get('ogo-progress').textContent};
 }
 (async()=>{
-  const projects=['legacy_missing','segodnya','miralinks_unwrap','tsn','korrespondent','source_batch_1','telegram_urls','editorial_urls','vybir_home','woman_urls','dim_urls','nashregion_urls','pets_urls','garden_urls','horoscope_urls','ustream','flash','vk','legacy_urls','day_urls','day'];
+  const projects=['legacy_missing','segodnya','miralinks_unwrap','tsn','korrespondent','source_batch_1','telegram_urls','facebook_urls','editorial_urls','vybir_home','woman_urls','dim_urls','nashregion_urls','pets_urls','garden_urls','horoscope_urls','ustream','flash','vk','legacy_urls','day_urls','day'];
   for(const project of projects) {
     const r=await scenario({project});
     assert.strictEqual(r.prompts.length,1);assert.strictEqual(r.requests.length,1);
@@ -44,7 +44,7 @@ async function scenario({project='legacy_missing',mode='apply',selected=false,id
     assert.strictEqual(body.project,project);assert.strictEqual(body.action,'ogo_mc');assert.strictEqual(body.nonce,'test-nonce');assert.strictEqual(body.backup,'1');
     assert.ok(r.redirect.includes('project='+project));
     // Optional differential check against a supplied previous release.
-    if(process.env.OGO_PREVIOUS_ADMIN_JS && !['legacy_missing','segodnya','miralinks_unwrap','korrespondent','source_batch_1','telegram_urls','vybir_home','flash'].includes(project)) {
+    if(process.env.OGO_PREVIOUS_ADMIN_JS && !['legacy_missing','segodnya','miralinks_unwrap','korrespondent','source_batch_1','telegram_urls','facebook_urls','vybir_home','flash'].includes(project)) {
       const previous=await scenario({project,script:fs.readFileSync(process.env.OGO_PREVIOUS_ADMIN_JS,'utf8')});
       assert.deepStrictEqual(JSON.parse(JSON.stringify(r)),JSON.parse(JSON.stringify(previous)),'Behavior changed for '+project);
     }

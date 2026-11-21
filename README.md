@@ -2,6 +2,9 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.41.0](dist/ogo-cleaner-1.41.0.zip) закриває звичайні посилання
+на Facebook та позначає вбудовані пости й відео для ручної перевірки.
+
 [ZIP 1.40.0](dist/ogo-cleaner-1.40.0.zip) закриває звичайні посилання
 на Telegram та позначає вбудовані об’єкти для ручної перевірки.
 
@@ -58,6 +61,7 @@ php tests/site-links.php
 php tests/source-batch.php
 php tests/miralinks-cleanup.php
 php tests/telegram-links.php
+php tests/facebook-links.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```
