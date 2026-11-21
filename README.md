@@ -2,6 +2,10 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.33.0](dist/ogo-cleaner-1.33.0.zip) додає «Не знайдено (404)». Режим
+зіставляє адреси з експортованого ZIP або CSV Search Console з посиланнями
+в опублікованих матеріалах WordPress і формує звіт із джерелами.
+
 [ZIP 1.32.0](dist/ogo-cleaner-1.32.0.zip) додає «Корреспондент.net» з такими
 самими правилами для `target` і `rel`, як у «ТСН».
 
@@ -28,6 +32,7 @@ php tests/legacy.php
 php tests/missing.php
 php tests/external.php
 php tests/source-links.php
+php tests/coverage.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```

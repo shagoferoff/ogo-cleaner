@@ -37,11 +37,15 @@ final class OGO_MC_Audit {
         $status = $wpdb->get_row($wpdb->prepare('SHOW TABLE STATUS WHERE Name=%s', $t));
         if ($status && strtolower($status->Engine) === 'innodb') update_option('ogo_mc_audit_schema', self::SCHEMA, false);
     }
-    private static function ready() { return get_option('ogo_mc_audit_schema') === self::SCHEMA; }
+    public static function ready() { return get_option('ogo_mc_audit_schema') === self::SCHEMA; }
     private static function valid_run($run) { return is_string($run) && preg_match('/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/D', $run); }
-    public static function state($run = '') { return get_option($run === '' ? 'ogo_mc_audit_scan' : 'ogo_mc_audit_run_'.$run, array()); }
-    private static function save_state($s) {
-        foreach (array('ogo_mc_audit_scan','ogo_mc_audit_run_'.$s['run']) as $key) {
+    public static function state($run = '', $coverage = false) {
+        $prefix = $coverage ? 'ogo_mc_404_' : 'ogo_mc_audit_';
+        return get_option($prefix.($run === '' ? 'scan' : 'run_'.$run), array());
+    }
+    private static function save_state($s, $coverage = false) {
+        $prefix = $coverage ? 'ogo_mc_404_' : 'ogo_mc_audit_';
+        foreach (array($prefix.'run_'.$s['run'],$prefix.'scan') as $key) {
             if (!update_option($key, $s, false) && get_option($key) !== $s) throw new RuntimeException('Не вдалося зберегти прогрес ревізії.');
         }
     }
@@ -67,9 +71,31 @@ final class OGO_MC_Audit {
             if ($wpdb->query('COMMIT') === false) throw new RuntimeException('Не вдалося завершити запис звіту.');
         } catch (Throwable $e) { $wpdb->query('ROLLBACK'); throw $e; }
     }
-    public static function ajax() {
+    private static function store_coverage_batch($run, $posts, $targets) {
+        if (!$posts) return;
+        global $wpdb; $t = self::table();
+        $keys = array_fill_keys(array_filter(array_column($targets,'key')), true);
+        $rows = array();
+        foreach ($posts as $post) {
+            if (stripos($post->post_content,'<a') === false) continue;
+            foreach (OGO_MC_Coverage_Engine::extract($post->post_content,get_permalink($post->ID) ?: home_url('/'),$keys) as $row) {
+                $row['run_id']=$run; $row['post_id']=$post->ID;
+                $rows[]=$row;
+            }
+        }
+        if ($wpdb->query('START TRANSACTION') === false) throw new RuntimeException('Не вдалося почати запис звіту.');
+        try {
+            $first=$posts[0]->ID; $last=end($posts)->ID;
+            if ($wpdb->query($wpdb->prepare("DELETE FROM $t WHERE run_id=%s AND post_id BETWEEN %d AND %d",$run,$first,$last)) === false) throw new RuntimeException('Не вдалося оновити порцію звіту.');
+            foreach ($rows as $row) {
+                if ($wpdb->insert($t,$row) === false) throw new RuntimeException('Не вдалося записати джерело посилання.');
+            }
+            if ($wpdb->query('COMMIT') === false) throw new RuntimeException('Не вдалося завершити запис звіту.');
+        } catch (Throwable $e) { $wpdb->query('ROLLBACK'); throw $e; }
+    }
+    public static function ajax($coverage = false) {
         if (!current_user_can('edit_others_posts')) wp_send_json_error('Недостатньо прав.',403);
-        check_ajax_referer('ogo_mc_audit','nonce');
+        check_ajax_referer($coverage?'ogo_mc_404':'ogo_mc_audit','nonce');
         if (!self::ready()) wp_send_json_error('Таблиця ревізії недоступна. Оновіть сторінку; перевірте права бази на створення таблиці.');
         $mode = sanitize_key($_POST['mode'] ?? '');
         if (!in_array($mode, array('start','scan'), true)) wp_send_json_error('Ревізія підтримує лише сканування. Заміни й відкат тут недоступні.');
@@ -83,29 +109,43 @@ final class OGO_MC_Audit {
         $error = null; $result = null;
         try {
             global $wpdb;
-            $s = self::state();
+            $s = self::state('', $coverage);
+            $version=$coverage?OGO_Media_Cleaner::VERSION:self::VERSION;
             if ($mode === 'start') {
+                $targets = $coverage ? OGO_MC_Coverage::upload($_FILES['coverage']??array()) : array();
+                $history_key=$coverage?'ogo_mc_404_history':'ogo_mc_audit_history';
                 $max = $wpdb->get_var("SELECT MAX(ID) FROM {$wpdb->posts}");
                 if ($wpdb->last_error) throw new RuntimeException('Не вдалося визначити межу сканування.');
-                $s = array('run'=>wp_generate_uuid4(),'cursor'=>0,'max'=>(int)$max,'scanned'=>0,'complete'=>false,'version'=>self::VERSION,'started'=>current_time('mysql'));
-                self::save_state($s);
-                $history = get_option('ogo_mc_audit_history', array());
-                array_unshift($history, $s['run']); update_option('ogo_mc_audit_history', array_values(array_unique($history)), false);
+                $s = array('run'=>wp_generate_uuid4(),'cursor'=>0,'max'=>(int)$max,'scanned'=>0,'complete'=>false,'version'=>$version,'started'=>current_time('mysql'));
+                if ($coverage && !add_option('ogo_mc_404_urls_'.$s['run'],$targets,'',false)) {
+                    throw new RuntimeException('Не вдалося зберегти імпортовані адреси.');
+                }
+                self::save_state($s, $coverage);
+                $history = get_option($history_key, array());
+                array_unshift($history, $s['run']); update_option($history_key, array_values(array_unique($history)), false);
             } else {
                 $run = sanitize_text_field(wp_unslash($_POST['run'] ?? ''));
                 if (empty($s['run']) || $run !== $s['run']) throw new RuntimeException('Відкрийте поточну ревізію або почніть нове сканування.');
-                if (($s['version'] ?? '') !== self::VERSION) throw new RuntimeException('Після оновлення почніть нову ревізію.');
+                if (($s['version'] ?? '') !== $version) throw new RuntimeException('Після оновлення почніть нову ревізію.');
                 if (!$s['complete']) {
                     $types = implode(',', array_fill(0, count(self::TYPES), '%s'));
-                    $posts = $wpdb->get_results($wpdb->prepare("SELECT ID,post_content FROM {$wpdb->posts} WHERE ID>%d AND ID<=%d AND post_type IN ($types) AND post_status IN ('publish','private','draft','pending','future') ORDER BY ID LIMIT 50", array_merge(array($s['cursor'],$s['max']),self::TYPES)));
+                    $statuses=$coverage?"'publish'":"'publish','private','draft','pending','future'";
+                    $batch_size=$coverage?200:50;
+                    $posts = $wpdb->get_results($wpdb->prepare("SELECT ID,post_content FROM {$wpdb->posts} WHERE ID>%d AND ID<=%d AND post_type IN ($types) AND post_status IN ($statuses) ORDER BY ID LIMIT %d", array_merge(array($s['cursor'],$s['max']),self::TYPES,array($batch_size))));
                     if ($wpdb->last_error) throw new RuntimeException('Не вдалося прочитати матеріали.');
-                    foreach ($posts as $post) {
-                        self::store_post($s['run'], $post);
-                        $s['cursor'] = (int)$post->ID; ++$s['scanned'];
-                        self::save_state($s);
+                    if ($coverage) {
+                        self::store_coverage_batch($s['run'],$posts,OGO_MC_Coverage::targets($s['run']));
+                        if ($posts) $s['cursor']=(int)end($posts)->ID;
+                        $s['scanned']+=count($posts);
+                    } else {
+                        foreach ($posts as $post) {
+                            self::store_post($s['run'], $post);
+                            $s['cursor'] = (int)$post->ID; ++$s['scanned'];
+                            self::save_state($s);
+                        }
                     }
-                    if (count($posts) < 50) $s['complete'] = true;
-                    self::save_state($s);
+                    if (count($posts) < $batch_size) $s['complete'] = true;
+                    self::save_state($s, $coverage);
                 }
             }
             $result = array('state'=>$s,'stats'=>self::stats($s['run']));

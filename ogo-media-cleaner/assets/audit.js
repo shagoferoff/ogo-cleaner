@@ -4,10 +4,18 @@
   const resume = document.getElementById('ogo-audit-scan');
   const stop = document.getElementById('ogo-audit-stop');
   const progress = document.getElementById('ogo-audit-progress');
+  const upload = document.getElementById('ogo-audit-upload');
   let busy = false, stopping = false, run = ogoAudit.run;
   stop.addEventListener('click', () => { stopping = true; });
   async function request(mode) {
-    const body = new URLSearchParams({action:ogoAudit.action || 'ogo_mc_audit', nonce:ogoAudit.nonce, mode, run});
+    const params = {action:ogoAudit.action || 'ogo_mc_audit', nonce:ogoAudit.nonce, mode, run};
+    let body = new URLSearchParams(params);
+    if (mode === 'start' && upload) {
+      if (!upload.files.length) throw new Error('Виберіть ZIP або CSV із Search Console.');
+      body = new FormData();
+      for (const [key, value] of Object.entries(params)) body.append(key, value);
+      body.append('coverage', upload.files[0]);
+    }
     const response = await fetch(ogoAudit.url, {method:'POST', body, credentials:'same-origin'});
     const result = await response.json();
     if (!result.success) throw new Error(typeof result.data === 'string' ? result.data : 'Помилка сервера.');
