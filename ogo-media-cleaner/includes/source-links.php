@@ -28,6 +28,12 @@ final class OGO_MC_Source_Links {
         'kmu.gov.ua'=>false, 'meteo.gov.ua'=>false, 'roe.vsei.ua'=>false,
         'takeinfo.net'=>false, 'vse.rv.ua'=>false, 'forms.gle'=>true,
     );
+    private const THIRD_BATCH=array(
+        'telekritika.ua','20minut.ua','biz.liga.net','press-centr.com','fakty.ictv.ua','lb.ua','ukr.net','expres.ua',
+        'news.finance.ua','ekvator.ua','ipress.ua','mvs.gov.ua','rvosvita.org.ua','hromadske.ua','news.ub.ua','osvita.ua',
+        'ubr.ua','glavcom.ua','fchoscha.inf.ua','obozrevatel.com','champion.com.ua','galinfo.com.ua','opogode.ua','prostobank.ua',
+        'rbc.ua','zn.ua','bbc.co.uk','meteoprog.ua','moz.gov.ua','ua.for-ua.com','nashigroshi.org','dpsu.gov.ua',
+    );
     private static function matches_host($tag,$domain) {
         $info=OGO_MC_Engine::href_info($tag);
         $parts=$info['parts']??null;
@@ -91,11 +97,17 @@ final class OGO_MC_Source_Links {
     public static function batch($content,$batch) {
         require_once __DIR__.'/external-engine.php';
         require_once __DIR__.'/site-links-engine.php';
-        if (stripos($content,'<a')===false || OGO_MC_Site_Links_Engine::ad_marker($content)) {
+        if (($batch!==3 && stripos($content,'<a')===false) || OGO_MC_Site_Links_Engine::ad_marker($content)) {
             return array('after'=>$content,'total'=>0,'removed'=>0,'review'=>0,'fragments'=>array(),'summary'=>'');
         }
-        $domains=$batch===2?self::SECOND_BATCH:self::FIRST_BATCH;
-        return self::edit_links($content,function($tag) use ($domains) {
+        $domains=array(1=>self::FIRST_BATCH,2=>self::SECOND_BATCH,3=>array_fill_keys(self::THIRD_BATCH,false))[$batch];
+        $tokens=null;
+        $embeds=0;
+        if ($batch===3) {
+            require_once __DIR__.'/source-embeds.php';
+            list($tokens,$embeds)=OGO_MC_Source_Embeds::inspect($content,self::THIRD_BATCH);
+        }
+        $result=self::edit_links($content,function($tag) use ($domains) {
             $href=OGO_MC_Engine::href_info($tag);
             $link=$href?OGO_MC_External_Engine::classify($href['raw']):null;
             if (!$link || $link['kind']==='review') return false;
@@ -104,7 +116,8 @@ final class OGO_MC_Source_Links {
             $attributes=OGO_MC_External_Engine::link_attributes($tag);
             $rel=explode(' ',$attributes['rel']);
             return !in_array('sponsored',$rel,true) && OGO_MC_Site_Links_Engine::is_closed($rel)===$domains[$domain];
-        },true,true);
+        },true,true,null,$tokens);
+        return $batch===3?self::add_embed_review($result,$embeds,'Вставки для ручної перевірки'):$result;
     }
 
     public static function miralinks($content,$targets) {
@@ -151,10 +164,16 @@ final class OGO_MC_Source_Links {
             $attributes=OGO_MC_External_Engine::link_attributes($tag);
             return !OGO_MC_Site_Links_Engine::is_closed(explode(' ',$attributes['rel']));
         },true,true,null,$tokens);
+        return self::add_embed_review($result,$embeds,'Вставки '.ucfirst($provider).' для ручної перевірки');
+    }
+
+    private static function add_embed_review($result,$embeds,$label) {
+        $embeds+=$result['wrapped_embeds']??0;
+        unset($result['wrapped_embeds']);
         $result['blocking_review']=$result['review'];
         $result['total']+=$embeds;
         $result['review']+=$embeds;
-        if ($embeds) $result['summary'].=' Вставки '.ucfirst($provider).' для ручної перевірки: '.$embeds.'.';
+        if ($embeds) $result['summary'].=' '.$label.': '.$embeds.'.';
         return $result;
     }
 
@@ -163,10 +182,14 @@ final class OGO_MC_Source_Links {
         $edits=array();
         $changed=0;
         $review=0;
+        $wrapped_embeds=0;
         foreach ($tokens??OGO_MC_Engine::html_tokens($content,$protect_embeds) as $token) {
             list($tag,$offset)=$token;
             if (!empty($token[2])) {
-                foreach ($stack as &$open) $open['target']=false;
+                foreach ($stack as &$open) {
+                    if ($open['target'] && $token[2]==='unmatched_embed') ++$wrapped_embeds;
+                    $open['target']=false;
+                }
                 unset($open);
                 continue;
             }
@@ -201,7 +224,7 @@ final class OGO_MC_Source_Links {
             }
         }
         foreach ($stack as $open) if ($open['target']) ++$review;
-        return array(
+        $result=array(
             'after'=>self::apply_edits($content,$edits),
             'total'=>$changed+$review,
             'removed'=>$changed,
@@ -209,5 +232,7 @@ final class OGO_MC_Source_Links {
             'fragments'=>array(),
             'summary'=>$review?'Вкладені або незакриті посилання потребують ручної перевірки.':'',
         );
+        if ($wrapped_embeds) $result['wrapped_embeds']=$wrapped_embeds;
+        return $result;
     }
 }

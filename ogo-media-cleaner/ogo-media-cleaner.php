@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.42.0
+ * Version: 1.43.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -15,7 +15,7 @@ require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 require_once __DIR__ . '/includes/site-links.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.42.0';
+    public const VERSION = '1.43.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types($project='') {
@@ -246,7 +246,8 @@ final class OGO_Media_Cleaner {
         $run=isset($_GET['run'])?sanitize_text_field(wp_unslash($_GET['run'])):$operation_run;
         $page=max(1,absint($_GET['paged']??1));
         $social_mode=in_array($project,array('telegram_urls','facebook_urls'),true);
-        $review_only=$social_mode && ($_GET['review']??'')==='1';
+        $review_filter_available=$social_mode || $project==='source_batch_3';
+        $review_only=$review_filter_available && ($_GET['review']??'')==='1';
         $review_filter=$review_only?' AND review>0':'';
         $rows=$wpdb->get_results($wpdb->prepare("SELECT * FROM $t WHERE run_id=%s AND project=%s$review_filter ORDER BY id LIMIT 20 OFFSET %d",$run,$project,($page-1)*20));
         $labels=array('ready'=>'Готово до очищення','review'=>'Ручна перевірка','done'=>'Очищено','restored'=>'Відновлено','conflict'=>'Пропущено: конфлікт');
@@ -332,6 +333,8 @@ final class OGO_Media_Cleaner {
         <?php elseif ($project==='source_batch_2'): ?>
         <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до відкритих посилань із другої партії ревізії. Для <code>prosport.tsn.ua</code> і <code>forms.gle</code> оновлює атрибути вже закритих посилань. Враховує точний домен і варіант із <code>www</code>.</p>
         <p>Вбудовані матеріали й посилання з виявленими ознаками реклами пропускає. URL, анкор та інші значення <code>rel</code> зберігаються.</p>
+        <?php elseif ($project==='source_batch_3'): ?>
+        <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на 32 домени з третьої партії ревізії у статтях без рекламної позначки. Виявлені вставки позначає для ручної перевірки. Звичайні посилання в тій самій статті можна оновити окремо.</p>
         <?php elseif ($social_mode): ?>
         <p>Додає <code>target="_blank"</code> і <code>nofollow noopener</code> до звичайних відкритих посилань на <code><?php echo esc_html($projects[$project]['hosts'][0]); ?></code> (також із <code>www</code>) у статтях без рекламної позначки. Вбудовані пости й відео позначає для ручної перевірки. Звичайні посилання в тій самій статті можна оновити окремо від вставки.</p>
         <?php elseif ($updating_attributes): ?>
@@ -370,7 +373,7 @@ final class OGO_Media_Cleaner {
         <p>Відкат працює для запуску, вибраного у звіті. Зміни виконуються порціями до 20 матеріалів. Відкат пропускає матеріали з подальшими правками.</p>
         <p><strong>Після очищення/відкату очистіть кеш сайту та CDN, якщо вони використовуються.</strong> Модуль скидає кеш записів WordPress; сторонній кеш може зберігати стару сторінку.</p>
         <h2>Звіт і журнал</h2>
-        <?php if ($social_mode && $run!==''): ?>
+        <?php if ($review_filter_available && $run!==''): ?>
         <p><a class="button" href="<?php echo esc_url(add_query_arg(array('page'=>'ogo-media-cleaner','project'=>$project,'run'=>$run,'review'=>$review_only?'0':'1'),admin_url('tools.php'))); ?>"><?php echo $review_only?'Показати всі матеріали':'Лише матеріали для ручної перевірки'; ?></a></p>
         <?php endif; ?>
         <?php foreach (self::stats($run,$project) as $st) echo '<p>'.esc_html(($labels[$st['status']]??$st['status']).': '.$st['materials'].' матеріалів; '.$count_label.': '.$st['links'].'; для перевірки: '.$st['review']).'</p>'; ?>

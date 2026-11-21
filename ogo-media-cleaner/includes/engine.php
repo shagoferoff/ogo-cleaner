@@ -14,6 +14,7 @@ final class OGO_MC_Engine {
             'site_links' => array('label'=>'Зовнішні посилання — аудит сайту', 'hosts'=>array(), 'photo_callouts'=>false),
             'source_batch_1' => array('label'=>'Зовнішні посилання — перша партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes', 'source_batch'=>1),
             'source_batch_2' => array('label'=>'Зовнішні посилання — друга партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes', 'source_batch'=>2),
+            'source_batch_3' => array('label'=>'Зовнішні посилання — третя партія', 'hosts'=>array(), 'photo_callouts'=>false, 'link_action'=>'attributes', 'source_batch'=>3),
             'telegram_urls' => array('label'=>'Зовнішні посилання: Телеграм', 'hosts'=>array('t.me'), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'facebook_urls' => array('label'=>'Зовнішні посилання: Facebook', 'hosts'=>array('facebook.com'), 'photo_callouts'=>false, 'link_action'=>'attributes'),
             'audit' => array('label'=>'Ревізія старих посилань', 'hosts'=>array('ogo.ua','ogo.rv.ua'), 'photo_callouts'=>false),
@@ -52,9 +53,10 @@ final class OGO_MC_Engine {
         preg_match_all('~([^\s=<>/]+)(?:\s*=\s*(?:"([^"]*)"|\'([^\']*)\'|([^\s>]+)))?~', substr($m[0], strlen($name)+1, -1), $attrs, PREG_SET_ORDER | PREG_OFFSET_CAPTURE | PREG_UNMATCHED_AS_NULL);
         return $attrs;
     }
-    public static function html_tokens($content,$protect_embeds=false) {
+    public static function html_tokens($content,$protect_embeds=false,$media_shortcodes=false) {
         $embedded=$protect_embeds?'iframe|object|video|audio|template|':'';
         $block=$protect_embeds?'\[embed(?:\s[^\]]*)?\][\s\S]*?\[/embed\]|<!--\s*wp:(?<embed_block>(?:core/)?embed|core-embed/[a-z0-9-]+)(?=[\s-])(?:(?!-->)[\s\S])*(?<!/)-->[\s\S]*?(?:<!--\s*/wp:\k<embed_block>\s*-->|$)|':'';
+        if ($media_shortcodes) $block.='\[(?:embed|iframe|video|audio)(?=[\s\]/])[^\]]*\]|';
         $opaque=$block.'<!--[\s\S]*?(?:-->|$)|<(?<raw_tag>'.$embedded.'script|style|textarea|pre|code)(?=[\s/>])(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\k<raw_tag>\s*>|$)';
         $tag='<(?:/?[a-z]|[!?])(?:[^<>"\']|"[^"]*"|\'[^\']*\')*>';
         preg_match_all('~'.$opaque.'|'.$tag.'~i',$content,$tokens,PREG_OFFSET_CAPTURE);

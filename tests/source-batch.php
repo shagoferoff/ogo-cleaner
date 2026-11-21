@@ -90,3 +90,66 @@ $overlap='<a href="https://suspilne.media/x" rel="nofollow">Закрите</a>';
 batch_check($overlap,$overlap,0,0,$project);
 batch_check($overlap,'<a href="https://suspilne.media/x" rel="nofollow noopener" target="_blank">Закрите</a>',1);
 echo "Passed second-batch domain list, audit status, advertising, embed protection and repeat-run checks.\n";
+
+$project='source_batch_3';
+$third_open=array(
+    'telekritika.ua','20minut.ua','biz.liga.net','press-centr.com','fakty.ictv.ua','lb.ua','ukr.net','expres.ua',
+    'news.finance.ua','ekvator.ua','ipress.ua','mvs.gov.ua','rvosvita.org.ua','hromadske.ua','news.ub.ua','osvita.ua',
+    'ubr.ua','glavcom.ua','fchoscha.inf.ua','obozrevatel.com','champion.com.ua','galinfo.com.ua','opogode.ua','prostobank.ua',
+    'rbc.ua','zn.ua','bbc.co.uk','meteoprog.ua','moz.gov.ua','ua.for-ua.com','nashigroshi.org','dpsu.gov.ua',
+);
+foreach ($third_open as $host) {
+    $tag='<a href="https://'.$host.'/x">Джерело</a>';
+    batch_check($tag,str_replace('">','" target="_blank" rel="nofollow noopener">',$tag),1,0,$project);
+    $closed_tag='<a href="https://'.$host.'/x" rel="nofollow">Джерело</a>';
+    batch_check($closed_tag,$closed_tag,0,0,$project);
+}
+$url='https://fakty.ictv.ua/video/12';
+$plain='<a href="'.$url.'" rel="noreferrer"><b>Джерело</b></a>';
+$expected=str_replace('rel="noreferrer"','rel="nofollow noopener noreferrer" target="_blank"',$plain);
+$embeds=array(
+    '<iframe data-src="'.$url.'"></iframe>',
+    '<object><param name="movie" value="'.$url.'"><embed src="'.$url.'">'.$plain.'</object>',
+    '<object><object data="/player"></object>'.$plain.'</object>',
+    '<object><object data="/player"></object><param name="movie" value="'.$url.'">'.$plain.'</object>',
+    '<embed src="'.$url.'">',
+    '<video><source src="https://media.fakty.ictv.ua/video.mp4"></video>',
+    '<audio src="'.$url.'"></audio>',
+    '[embed]'.$url.'[/embed]',
+    '[video src="'.$url.'"]',
+    '[iframe src="'.$url.'"]',
+    '<p>'.$url.'</p>',
+    "\n".$url."\n",
+    '<script src="'.$url.'"></script>',
+    '<figure class="wp-block-embed">'.$plain.'</figure>',
+    '<div class="embed-container"><div>'.$plain.'</div>'.$plain.'</div>',
+    '<div data-player-url="'.$url.'">'.$plain.'</div>',
+    '<a href="'.$url.'" data-video-url="'.$url.'">Відео</a>',
+    '<a href="'.$url.'"><embed src="https://example.org/player"></a>',
+    '<a href="'.$url.'"><iframe src="'.$url.'"></iframe></a>',
+    '<!-- wp:embed {"url":"https:\\/\\/fakty.ictv.ua\\/video\\/12"} --><figure>'.$plain.'</figure><!-- /wp:embed -->',
+);
+foreach ($embeds as $embed) {
+    batch_check($embed,$embed,0,1,$project);
+    batch_check($plain.$embed,$expected.$embed,1,1,$project);
+    batch_check($embed.$plain,$embed.$expected,1,1,$project);
+    $mixed=OGO_MC_Engine::analyze($plain.$embed,$project);
+    if ($mixed['blocking_review']!==0 || strpos($mixed['summary'],'Вставки для ручної перевірки')===false) {
+        throw new RuntimeException('Independent ordinary link and embed must be reported together');
+    }
+}
+$ignored='<!-- <object data="'.$url.'">'.$plain.'</object> -->'
+    .'<code>[embed]'.$url.'[/embed]</code><pre>'.$plain.'</pre>'
+    .'<div class="embed-container"><!-- <embed src="'.$url.'"> --><code>'.$url.'</code></div>'
+    .'<iframe src="https://fakty.ictv.ua.example.org/player"></iframe>'
+    .'<a href="https://ictv.ua/video">Інший домен</a>'
+    .'<a href="https://example.org">'.$url.'</a>'
+    .'<a href="'.$url.'" rel="sponsored">Реклама</a>';
+batch_check($ignored,$ignored,0,0,$project);
+$paid=$plain.'<p>На правах реклами.</p>';
+batch_check($paid,$paid,0,0,$project);
+$www='<a href="//www.fakty.ictv.ua/video">Джерело</a>';
+batch_check($www,str_replace('">','" target="_blank" rel="nofollow noopener">',$www),1,0,$project);
+$unclosed='<a href="'.$url.'">Незакрите';
+batch_check($unclosed,$unclosed,0,1,$project);
+echo "Passed third-batch exact domains, ordinary links, embed review, conflicts and repeat-run checks.\n";
