@@ -16,13 +16,28 @@ $ictv='<object data="http://kriminal.ictv.ua/public/swfobject/zl_player.swf" typ
 $youtube='<embed allowfullscreen="true" src="//www.youtube.com/v/iKPo4-Qeudw?version=3" type="application/x-shockwave-flash"></embed>';
 $iframe='<iframe src="https://example.org/player.SWF?x=1#start"> </iframe>';
 $modern='<iframe src="https://www.youtube.com/embed/iKPo4-Qeudw"></iframe><video controls src="/story.mp4"></video>';
-flash_check('<p>До</p>'.$ictv.'<p>Підпис до відео</p>'.$youtube.$iframe.$modern,'<p>До</p><p>Підпис до відео</p>'.$modern,3);
+flash_check('<p>До</p>'.$ictv.'<p>Підпис до відео</p>'.$youtube.$iframe.$modern,'<p>До</p><p>Підпис до відео</p>[embed]https://youtu.be/iKPo4-Qeudw[/embed]'.$modern,3);
 flash_check('<OBJECT classid="clsid:D27CDB6E-AE6D-11cf-96B8-444553540000"><param name=movie value="/old/player"/></OBJECT>','',1);
 flash_check('<object><param name="movie" value="player.swf"><embed src=/player.swf></object>','',1);
 flash_check('<object data="outer.swf"><object><embed src="inner.swf"></object></object>','',1);
 flash_check('<embed src="https://example.org/player%2ESWF?media=intro.mp4" />','',1);
 flash_check('<object codebase="https://example.org/swflash.cab#version=1"><param name=movie value="/v/video"></object>','',1);
 flash_check('<!-- wp:html -->'.$ictv.'<!-- /wp:html -->','<!-- wp:html --><!-- /wp:html -->',1);
+$old_url='http://www.youtube.com/v/K7wvnnpGVyI&amp;hl=ru_RU&amp;fs=1&amp;';
+$legacy='<object height="344" width="425"><param name="movie" value="'.$old_url.'"/>'
+    .'<param name="allowFullScreen" value="true"/><param name="allowscriptaccess" value="always"/>'
+    .'<embed allowfullscreen="true" allowscriptaccess="always" height="344" src="'.$old_url.'" type="application/x-shockwave-flash" width="425"/></object>';
+$shortcode='[embed]https://youtu.be/K7wvnnpGVyI[/embed]';
+flash_check('<p>До</p>'.$legacy.'<p>Після</p>','<p>До</p>'.$shortcode.'<p>Після</p>',1);
+$result=OGO_MC_Engine::analyze($legacy.$ictv,'flash');
+if ($result['sources']!==array('YouTube · https://youtu.be/K7wvnnpGVyI','kriminal.ictv.ua')) throw new RuntimeException('Source column data incorrect');
+flash_check('<object data="//www.youtube.com/v/K7wvnnpGVyI?version=3"></object>',$shortcode,1);
+flash_check('<object><param name="movie" value="https://www.youtube.com/v/K7wvnnpGVyI"/></object>',$shortcode,1);
+flash_check('<embed src="https://www.youtube.com/v/K7wvnnpGVyI">',$shortcode,1);
+flash_check('<iframe src="https://www.youtube.com/v/K7wvnnpGVyI"></iframe>',$shortcode,1);
+flash_check('<embed type="application/x-shockwave-flash" src="https://youtu.be/K7wvnnpGVyI">',$shortcode,1);
+flash_check('<embed type="application/x-shockwave-flash" src="https://www.youtube.com/watch?v=K7wvnnpGVyI">',$shortcode,1);
+flash_check('<!-- wp:html -->'.$legacy.'<!-- /wp:html -->','<!-- wp:html -->'.$shortcode.'<!-- /wp:html -->',1);
 foreach (array(
     '<object data="/modern.pdf"><param name="movie" value="player.swf"></object>',
     '<object data="/player.swf"><a href="/story.mp4">Відкрити відео</a></object>',
@@ -32,6 +47,9 @@ foreach (array(
     '<object data="/player.swf"><param name="movie" value="/player.swf">',
     '<object data="/player.swf"><object data="/other.pdf"></object></object>',
     '<iframe src="/player.swf">',
+    '<embed type="application/x-shockwave-flash" src="https://www.youtube.com/v/unknown">',
+    '<object><param name="movie" value="https://www.youtube.com/v/K7wvnnpGVyI"/><embed src="https://www.youtube.com/v/iKPo4-Qeudw"/></object>',
+    '<object data="https://www.youtube.com/v/K7wvnnpGVyI"><p>Резервний текст</p></object>',
 ) as $manual) flash_check($manual,$manual,0,1);
 $protected='<!-- '.$ictv.' -->'.'<pre>'.$youtube.'</pre>'.'<script>'.$iframe.'</script>'
     .'<div data-example=\''.$ictv.'\'>Приклад</div>'.$modern
@@ -39,6 +57,7 @@ $protected='<!-- '.$ictv.' -->'.'<pre>'.$youtube.'</pre>'.'<script>'.$iframe.'</
     .'<iframe src="/player.swf" srcdoc="Важливий текст"></iframe>'
     .'<a href="/download/player.swf">Файл</a>'
     .'<object data="/paper.pdf"><param name="src" value="/paper.pdf"></object>'
-    .'<embed src="/image.svg?name=player.swf">';
+    .'<embed src="/image.svg?name=player.swf">'
+    .'<object data="https://youtube.com.example.net/v/K7wvnnpGVyI"></object>';
 flash_check($protected,$protected,0);
 echo 'Passed '.$count." Flash scope, fallback, protected markup and repeat-run checks.\n";

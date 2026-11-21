@@ -21,7 +21,7 @@ final class OGO_MC_Engine {
             'gazeta' => array('label'=>'Рівненська газета', 'hosts'=>array('gazeta.rv.ua','www.gazeta.rv.ua'), 'photo_callouts'=>false),
             'catalog' => array('label'=>'Каталог — зняття посилань', 'hosts'=>array('catalog.ogo.ua'), 'photo_callouts'=>false),
             'ustream' => array('label'=>'Ustream — видалення плеєрів і підписів', 'hosts'=>array('ustream.tv','www.ustream.tv'), 'photo_callouts'=>false),
-            'flash' => array('label'=>'Flash — видалення плеєрів', 'hosts'=>array(), 'photo_callouts'=>false),
+            'flash' => array('label'=>'Flash — відновлення відео й очищення', 'hosts'=>array(), 'photo_callouts'=>false),
             'editorial_urls' => array('label'=>'Погоджені рубрики — в теги', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'vybir_home' => array('label'=>'Вибір 2010 — головна → Рейтинги', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'woman_urls' => array('label'=>'Жіночий клуб — заміна URL', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),

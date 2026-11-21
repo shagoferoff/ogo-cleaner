@@ -2,7 +2,7 @@
 /**
  * Plugin Name: OGO Cleaner
  * Description: Пакетне очищення й оновлення посилань у матеріалах ОГО з попереднім переглядом, журналом і відкатом.
- * Version: 1.36.0
+ * Version: 1.37.0
  * Requires at least: 6.0
  * Requires PHP: 7.4
  * Author: ОГО
@@ -15,7 +15,7 @@ require_once __DIR__ . '/includes/external.php';
 require_once __DIR__ . '/includes/coverage.php';
 require_once __DIR__ . '/includes/site-links.php';
 final class OGO_Media_Cleaner {
-    public const VERSION = '1.36.0';
+    public const VERSION = '1.37.0';
     private const DEFAULT_PROJECT = 'legacy_missing';
     private static function table() { global $wpdb; return $wpdb->prefix . 'ogo_media_cleanup'; }
     private static function post_types() { return array('post','page','rivnenschina','dovidka','phogo','press'); }
@@ -224,7 +224,8 @@ final class OGO_Media_Cleaner {
         if ($unwrapping) { $count_label='посилань для зняття/знятих'; $row_action='Зняти'; }
         if ($updating_attributes) { $count_label='посилань для оновлення/оновлених'; $row_action='Оновити'; }
         if ($project==='legacy_missing' || $vk_mode || $project==='day') { $count_label='посилань для обробки/оброблених'; $row_action='Обробити'; }
-        if ($ustream_mode || $flash_mode) { $count_label='елементів для видалення/видалених'; $row_action='Видалити елементів'; }
+        if ($ustream_mode) { $count_label='елементів для видалення/видалених'; $row_action='Видалити елементів'; }
+        if ($flash_mode) { $count_label='вставок для обробки/оброблених'; $row_action='Обробити вставок'; }
         if ($project==='gazeta') { $count_label='збігів для обробки/оброблених'; $row_action='Обробити збігів'; }
         $apply_selected='Очистити вибрані';
         $apply_all='Очистити всі готові';
@@ -242,7 +243,7 @@ final class OGO_Media_Cleaner {
         <?php if ($archived): ?>
         <p>Виберіть попередній запуск у журналі, щоб переглянути зміни або відкотити очищення.</p>
         <?php elseif ($flash_mode): ?>
-        <p>Видаляє Flash-плеєри у <code>object</code>, <code>embed</code> та <code>iframe</code>, що завантажує SWF. Розпізнає файли <code>.swf</code>, Flash MIME-тип і службові позначки Flash. Вставки з резервним текстом, іншим медіа чи неповною розміткою залишає для ручної перевірки.</p>
+        <p>Замінює старі YouTube-плеєри на шорткод <code>[embed]</code> за ID відео. Прибирає інші впізнані Flash-вставки. Неоднозначні ID, резервний текст, інше медіа в тій самій вставці й неповна розмітка потребують ручної перевірки.</p>
         <?php elseif ($ustream_mode): ?>
         <p>Видаляє закриті iframe з порожнім вмістом та src на точні домени <code>ustream.tv</code> / <code>www.ustream.tv</code>, шляхи <code>/embed/ID</code> або <code>/embed/recorded/ID</code>. Порядок атрибутів і стилі не заважають. Підтримує http, https та //.</p>
         <p>Видаляє стандартні посилання-підписи «Live streaming video by Ustream» та «Video streaming by Ustream» на головну Ustream. Прибирає br між видаленим плеєром і підписом, а також прості абзаци й блоки HTML/paragraph Gutenberg, що стали порожніми. Текст статей та інше відео зберігає. Нестандартні посилання, невпізнані плеєри й незакриті теги залишає для перевірки.</p>
@@ -313,10 +314,16 @@ final class OGO_Media_Cleaner {
         <h2>Звіт і журнал</h2>
         <?php foreach (self::stats($run,$project) as $st) echo '<p>'.esc_html(($labels[$st['status']]??$st['status']).': '.$st['materials'].' матеріалів; '.$count_label.': '.$st['links'].'; для перевірки: '.$st['review']).'</p>'; ?>
         <form method="get"><input type="hidden" name="page" value="ogo-media-cleaner"><input type="hidden" name="project" value="<?php echo esc_attr($project); ?>"><label>Запуск <select name="run"><?php foreach(array_unique(array_merge(array($s['run']??''),$runs)) as $r) { if (!$r) continue; echo '<option value="'.esc_attr($r).'" '.selected($run,$r,false).'>'.esc_html($r).'</option>'; } ?></select></label> <button class="button">Показати</button></form>
-        <table class="widefat striped"><thead><tr><th>Вибір</th><th>Матеріал</th><th>Стан</th><th>Попередній перегляд</th></tr></thead><tbody>
+        <table class="widefat striped"><thead><tr><th>Вибір</th><th>Матеріал</th><?php if ($flash_mode): ?><th>Джерело</th><?php endif; ?><th>Стан</th><th>Попередній перегляд</th></tr></thead><tbody>
         <?php foreach($rows as $r): ?><tr>
         <td><?php if ($r->status==='done' || (!$archived && $run===($s['run']??'') && $r->status==='ready')): ?><input type="checkbox" class="ogo-row" value="<?php echo (int)$r->id; ?>"><?php endif; ?></td>
         <td><a href="<?php echo esc_url(get_edit_post_link($r->post_id)); ?>"><?php echo esc_html(get_the_title($r->post_id)?:'Без назви'); ?></a><br>ID <?php echo (int)$r->post_id; ?></td>
+        <?php if ($flash_mode): ?>
+        <td style="overflow-wrap:anywhere"><?php
+            $flash_sources=OGO_MC_Engine::analyze($r->before_content,'flash')['sources'];
+            echo $flash_sources?implode('<br>',array_map('esc_html',$flash_sources)):'—';
+        ?></td>
+        <?php endif; ?>
         <td><?php echo esc_html($labels[$r->status]??$r->status); ?><br><?php echo esc_html($row_action); ?>: <?php echo (int)$r->removed; ?><br>Перевірити: <?php echo (int)$r->review; ?><p><?php echo esc_html($r->message); ?></p></td>
         <td><details><summary>Було → стане (HTML)</summary><p>Оригінал</p><textarea readonly style="width:100%;height:180px"><?php echo esc_textarea($r->before_content); ?></textarea><p>Після очищення</p><textarea readonly style="width:100%;height:180px"><?php echo esc_textarea($r->after_content); ?></textarea></details></td>
         </tr><?php endforeach; ?></tbody></table>

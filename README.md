@@ -2,6 +2,9 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.37.0](dist/ogo-cleaner-1.37.0.zip) відновлює старі YouTube-вставки
+через шорткод `[embed]` і показує джерело у Flash-звіті.
+
 [ZIP 1.36.0](dist/ogo-cleaner-1.36.0.zip) додає аудит зовнішніх посилань
 в опублікованих статтях з ознаками реклами та станом `rel`.
 
