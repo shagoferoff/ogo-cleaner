@@ -47,29 +47,22 @@ if ($embed!=='') {
     $fixtures[]=$plain_id;
 }
 update_post_meta($article,'anons',$source);
-$previous_paid=OGO_MC_Paid_Posts::records();
+$previous_paid=get_option('ogo_mc_paid_articles',array());
 try {
     if ($batch===4) {
+        delete_option('ogo_mc_paid_articles');
         $imported=batch_fixture($plain,'publish','post','Source batch imported fixture');
         $marked=batch_fixture($plain,'publish','post','Source batch marked fixture');
         $fixtures[]=$imported;
         $fixtures[]=$marked;
         update_post_meta($marked,'paid_article','1');
-        $upload=fopen('php://temp','w+');
-        fwrite($upload,"\xEF\xBB\xBFПублікація,Решта\nhttps://ogo.ua/imported-fixture/,text\nhttp://www.ogo.ua/imported-fixture,duplicate\n");
-        rewind($upload);
-        batch_assert(OGO_MC_Paid_Posts::read_csv($upload)===array('/imported-fixture'),'Read publication column and normalize duplicate URLs');
-        fclose($upload);
-        $date=substr(get_post($imported)->post_date,0,10);
-        $legacy='/articles/view/'.$date.'/'.$imported.'.html';
-        batch_assert(OGO_MC_Paid_Posts::resolve($legacy)===$imported && OGO_MC_Paid_Posts::resolve('/articles/view/2001-01-01/'.$imported.'.html')===0,'Resolve the dated legacy article and reject mismatched IDs');
-        update_option('ogo_mc_paid_articles',array($legacy=>$imported,'/unresolved-fixture'=>0),false);
-        $paid_report=OGO_MC_Paid_Posts::report();
-        $needs_label=array_column($paid_report['missing'],'id');
-        batch_assert(in_array($imported,$needs_label,true) && in_array($marked,$needs_label,true)
-            && in_array('/unresolved-fixture',$paid_report['unresolved'],true),'Report flags both signals for a future text disclosure');
+        batch_assert(!has_action('admin_post_ogo_mc_import_paid'),'Remove the previous upload handler');
+        $_GET=array('project'=>'paid_posts');
+        ob_start(); OGO_Media_Cleaner::page(); $page_html=ob_get_clean();
+        batch_assert(strpos($page_html,'paid_posts')===false && strpos($page_html,'paid_csv')===false,'The old URL exposes neither the menu item nor the import form');
     }
     $state=batch_ajax('start')['state']; $run=$state['run'];
+    if ($batch===4) update_option('ogo_mc_paid_articles',array('/existing-import'=>$imported,'/unresolved-fixture'=>0),false);
     do { $state=batch_ajax('scan',$run)['state']; } while (!$state['complete']);
     global $wpdb;
     $table=$wpdb->prefix.'ogo_media_cleanup';

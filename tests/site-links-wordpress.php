@@ -33,7 +33,7 @@ $draft=inventory_post('draft',$open);
 $registered=inventory_post('publish',$open);
 $field=inventory_post('publish',$open);
 update_post_meta($field,'paid_article','1');
-$previous_paid=OGO_MC_Paid_Posts::records();
+$previous_paid=get_option('ogo_mc_paid_articles',array());
 update_option('ogo_mc_paid_articles',$previous_paid+array('/inventory-fixture'=>$registered),false);
 update_post_meta($first,'anons','<a href="https://ignore-anons.invalid/">Анонс</a>');
 $previous=OGO_MC_External::state();
@@ -57,11 +57,21 @@ try {
     inventory_check(count($paid_row)===1 && (int)$paid_row[0]['paid']===1 && (int)$paid_row[0]['ad_marker']===1,'Footer is surfaced for published source: '.json_encode(array_column($rows,'ad_marker')));
     $classified=array_column($rows,null,'post_id');
     foreach (array($registered,$field) as $id) {
-        inventory_check((int)$classified[$id]['paid']===1 && (int)$classified[$id]['ad_marker']===0 && (int)$classified[$id]['closed']===0,'CSV and field mark paid without changing rel or content');
+        inventory_check((int)$classified[$id]['paid']===0 && (int)$classified[$id]['ad_marker']===0 && (int)$classified[$id]['closed']===0,'Private flags stay out of new audit reports');
     }
     $_GET=array('project'=>'site_links','run'=>$run,'domain'=>$domain,'paid'=>'1','closed'=>'1');
     ob_start(); OGO_Media_Cleaner::page(); $html=ob_get_clean();
     inventory_check(strpos($html,'На правах реклами')!==false && strpos($html,'post='.$second)!==false && strpos($html,'post='.$first)===false,'Status filters open only the matching article');
+    $state_key='ogo_mc_site_links_run_'.$run;
+    update_option($state_key,get_option($state_key)+array('paid_revision'=>'old-fixture'),false);
+    foreach (array($registered,$field) as $id) $wpdb->update($table,array('paid'=>1),array('run_id'=>$run,'post_id'=>$id));
+    $_GET=array('project'=>'site_links','run'=>$run,'domain'=>$domain,'paid'=>'1');
+    ob_start(); OGO_Media_Cleaner::page(); $legacy=ob_get_clean();
+    inventory_check(strpos($legacy,'post='.$second)!==false && strpos($legacy,'post='.$registered)===false
+        && strpos($legacy,'post='.$field)===false,'Older paid filters show only public signals');
+    $_GET=array('project'=>'site_links','run'=>$run,'paid'=>'1','closed'=>'0');
+    ob_start(); OGO_Media_Cleaner::page(); $legacy_summary=ob_get_clean();
+    inventory_check(strpos($legacy_summary,$domain)===false,'Older paid aggregates omit private flags');
     inventory_check(!site_links_request('apply',$run)['success'] && get_post($first)->post_content===$open.$open.$closed,'Audit has no content mutation');
     inventory_check(OGO_MC_External::state()===$previous,'Miralinks run remains independent');
     wp_set_current_user(0);

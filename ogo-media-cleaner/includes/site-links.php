@@ -59,10 +59,9 @@ final class OGO_MC_Site_Links {
         ));
         if ($wpdb->last_error) throw new RuntimeException('Не вдалося прочитати статті.');
         if (!$posts) { $state['complete']=true; return $state; }
-        $paid=OGO_MC_Paid_Posts::paid_ids(array_column($posts,'ID'));
         $rows=array();
         foreach ($posts as $post) {
-            list($links,$review)=OGO_MC_Site_Links_Engine::inspect($post->post_content,isset($paid[$post->ID]));
+            list($links,$review)=OGO_MC_Site_Links_Engine::inspect($post->post_content);
             foreach ($links as $link) $rows[]=array_merge(array($state['run'],$post->ID),array_values($link));
             $state['review']+=$review;
         }
@@ -110,7 +109,7 @@ final class OGO_MC_Site_Links {
                 $max=$wpdb->get_var("SELECT MAX(ID) FROM {$wpdb->posts}");
                 if ($wpdb->last_error) throw new RuntimeException('Не вдалося визначити межу сканування.');
                 $state=array('run'=>wp_generate_uuid4(),'cursor'=>0,'max'=>(int)$max,'scanned'=>0,'review'=>0,'complete'=>false,
-                    'started'=>current_time('mysql'),'paid_revision'=>OGO_MC_Paid_Posts::revision());
+                    'started'=>current_time('mysql'));
                 self::save($state);
                 array_unshift($history,$state['run']);
                 if (!update_option(self::ACTION.'_history',$history,false)) throw new RuntimeException('Не вдалося зберегти запуск у журналі.');
@@ -120,7 +119,7 @@ final class OGO_MC_Site_Links {
                 $state=self::state($run);
                 if (!$state) throw new RuntimeException('Поточний запуск недоступний.');
                 if (!$state['complete']) {
-                    if (($state['paid_revision']??'')!==OGO_MC_Paid_Posts::revision()) throw new RuntimeException('Список платних статей оновився. Почніть нову ревізію.');
+                    if (isset($state['paid_revision'])) throw new RuntimeException('Після оновлення почніть нову ревізію.');
                     $state=self::scan($state);
                     self::save($state);
                 }
@@ -134,13 +133,15 @@ final class OGO_MC_Site_Links {
     private static function url($args=array()) {
         return add_query_arg(array_merge(array('page'=>'ogo-media-cleaner','project'=>'site_links'),$args),admin_url('tools.php'));
     }
-    private static function results($run,$domain,$paid,$closed,$limit,$offset) {
+    private static function results($run,$domain,$paid,$closed,$limit,$offset,$legacy_paid) {
         global $wpdb; $t=self::table(); $where=$wpdb->prepare('run_id=%s',$run);
+        // In 1.44.0, paid could include private article-level signals.
+        $public_paid=$legacy_paid?"(CASE WHEN ad_marker=1 OR FIND_IN_SET('sponsored',REPLACE(rel_tokens,' ',','))>0 THEN 1 ELSE 0 END)":"$t.paid";
         if ($domain!=='') $where.=$wpdb->prepare(' AND domain=%s',$domain);
-        if ($paid!=='') $where.=$wpdb->prepare(' AND paid=%d',$paid);
+        if ($paid!=='') $where.=$wpdb->prepare(" AND $public_paid=%d",$paid);
         if ($closed!=='') $where.=$wpdb->prepare(' AND closed=%d',$closed);
         $query=$domain===''
-            ? "SELECT domain,paid,closed,COUNT(DISTINCT post_id) AS articles,COUNT(DISTINCT url_key) AS urls FROM $t WHERE $where GROUP BY domain,paid,closed ORDER BY articles DESC,domain,paid DESC,closed"
+            ? "SELECT domain,$public_paid AS paid,closed,COUNT(DISTINCT post_id) AS articles,COUNT(DISTINCT url_key) AS urls FROM $t WHERE $where GROUP BY domain,$public_paid,closed ORDER BY articles DESC,domain,paid DESC,closed"
             : "SELECT * FROM $t WHERE $where ORDER BY post_id DESC,id";
         $rows=$wpdb->get_results($query.$wpdb->prepare(' LIMIT %d OFFSET %d',$limit,$offset),ARRAY_A);
         if ($wpdb->last_error) throw new RuntimeException('Не вдалося прочитати звіт.');
@@ -161,7 +162,7 @@ final class OGO_MC_Site_Links {
         if (!in_array($paid,array('0','1'),true)) $paid='';
         if (!in_array($closed,array('0','1'),true)) $closed='';
         $page=max(1,absint($_GET['paged']??1)); $limit=40;
-        try { $rows=$state?self::results($run,$domain,$paid,$closed,$limit+1,($page-1)*$limit):array(); }
+        try { $rows=$state?self::results($run,$domain,$paid,$closed,$limit+1,($page-1)*$limit,isset($state['paid_revision'])):array(); }
         catch (Throwable $e) { echo '<div class="notice notice-error"><p>'.esc_html($e->getMessage()).'</p></div>'; return; }
         wp_enqueue_script('ogo-site-links',plugins_url('assets/audit.js',dirname(__DIR__).'/ogo-media-cleaner.php'),array(),OGO_Media_Cleaner::VERSION,true);
         wp_localize_script('ogo-site-links','ogoAudit',array('url'=>admin_url('admin-ajax.php'),'action'=>self::ACTION,'nonce'=>wp_create_nonce(self::ACTION),'run'=>$current_run,'reportUrl'=>self::url()));
@@ -169,7 +170,7 @@ final class OGO_MC_Site_Links {
         <div class="wrap"><h1>OGO Cleaner — Зовнішні посилання</h1>
         <?php OGO_Media_Cleaner::navigation('site_links'); ?>
         <p>Аудит рахує унікальні зовнішні URL в основному тексті опублікованих статей. Кожен рядок домену відповідає комбінації двох ознак. Стаття або URL можуть потрапити у кілька рядків.</p>
-        <p><strong>Платне</strong> визначається за позначкою «На правах реклами» в кінці статті або за <code>rel="sponsored"</code> у посиланні. Позначка статті охоплює всі її посилання для подальшої перевірки. «Безкоштовне» означає відсутність цих ознак. <strong>Закрите</strong> має <code>nofollow</code>, <code>sponsored</code> або <code>ugc</code> у <code>rel</code>. Відкриття в новій вкладці показано окремо в деталях.</p>
+        <p><strong>Платне</strong> визначається за позначкою «На правах реклами» в тексті статті або за <code>rel="sponsored"</code> у посиланні. Позначка статті охоплює всі її посилання для подальшої перевірки. «Безкоштовне» означає відсутність цих ознак. <strong>Закрите</strong> має <code>nofollow</code>, <code>sponsored</code> або <code>ugc</code> у <code>rel</code>. Відкриття в новій вкладці показано окремо в деталях.</p>
         <p><button class="button button-primary" id="ogo-audit-start">Нова ревізія</button>
         <button class="button" id="ogo-audit-scan" <?php disabled(!$current || !empty($current['complete'])); ?>>Продовжити поточну ревізію</button>
         <button class="button" id="ogo-audit-stop">Зупинити після поточної порції</button></p>
@@ -201,7 +202,6 @@ final class OGO_MC_Site_Links {
             $signals=array();
             if ($r['ad_marker']) $signals[]='«На правах реклами»';
             if (in_array('sponsored',explode(' ',$r['rel_tokens']),true)) $signals[]='rel=sponsored';
-            if ($r['paid'] && !$signals) $signals[]='Платна стаття';
         ?>
         <tr><td><?php if ($edit): ?><a href="<?php echo esc_url($edit); ?>"><?php endif; ?><?php echo esc_html(get_the_title($id)?:'Стаття '.$id); ?><?php if ($edit): ?></a><?php endif; ?></td>
         <td style="overflow-wrap:anywhere"><code><?php echo esc_html($r['target_url']); ?></code><br><?php echo esc_html($r['anchor_text']); ?></td>

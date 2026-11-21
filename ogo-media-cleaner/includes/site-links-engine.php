@@ -16,7 +16,7 @@ final class OGO_MC_Site_Links_Engine {
         return (bool)array_intersect($rel,array('nofollow','sponsored','ugc'));
     }
 
-    public static function inspect($content,$paid_post=false) {
+    public static function inspect($content) {
         $rows=array(); $review=0;
         if (stripos($content,'<a')===false) return array($rows,$review);
         $links=OGO_MC_External_Engine::extract($content,true);
@@ -28,7 +28,7 @@ final class OGO_MC_Site_Links_Engine {
             $sponsored=in_array('sponsored',$rel,true);
             $rows[]=array(
                 'domain'=>self::domain($link['domain']),'variant_key'=>$link['variant_key'],'url_key'=>$link['url_key'],
-                'paid'=>(int)($paid_post || $marker || $sponsored),'ad_marker'=>(int)$marker,
+                'paid'=>(int)($marker || $sponsored),'ad_marker'=>(int)$marker,
                 'closed'=>(int)self::is_closed($rel),
                 'rel_tokens'=>$link['rel'],'new_tab'=>(int)$link['new_tab'],
                 'target_url'=>$link['target_url'],'anchor_text'=>$link['anchor_text'],'link_count'=>$link['link_count'],
