@@ -21,7 +21,10 @@
     if (!result.success) throw new Error(typeof result.data === 'string' ? result.data : 'Помилка сервера.');
     const d = result.data;
     run = d.state.run;
-    progress.textContent = `Перевірено матеріалів: ${d.state.scanned}. Груп URL: ${d.stats.totals.urls}; посилань: ${d.stats.totals.links}; матеріалів із посиланнями: ${d.stats.totals.materials}. ${d.state.complete ? 'Ревізію завершено.' : 'Сканування триває.'}`;
+    const counts = d.stats
+      ? `Груп URL: ${d.stats.totals.urls}; посилань: ${d.stats.totals.links}; матеріалів із посиланнями: ${d.stats.totals.materials}. `
+      : '';
+    progress.textContent = `Перевірено матеріалів: ${d.state.scanned}. ${counts}${d.state.complete ? 'Ревізію завершено.' : 'Сканування триває.'}`;
     return d;
   }
   async function scan(mode) {

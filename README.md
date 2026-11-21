@@ -2,6 +2,9 @@
 
 WordPress-плагін OGO Cleaner. Код у `ogo-media-cleaner/`, готові ZIP у `dist/`.
 
+[ZIP 1.36.0](dist/ogo-cleaner-1.36.0.zip) додає аудит зовнішніх посилань
+в опублікованих статтях з ознаками реклами та станом `rel`.
+
 [ZIP 1.35.0](dist/ogo-cleaner-1.35.0.zip) додає «Flash — видалення плеєрів».
 
 [ZIP 1.34.0](dist/ogo-cleaner-1.34.0.zip) додає «Вибір 2010 — головна → Рейтинги».
@@ -39,6 +42,7 @@ php tests/external.php
 php tests/source-links.php
 php tests/coverage.php
 php tests/flash.php
+php tests/site-links.php
 node tests/audit-js.cjs
 node tests/admin-js.cjs
 ```

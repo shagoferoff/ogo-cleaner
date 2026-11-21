@@ -48,6 +48,9 @@ const response = (complete, scanned=0) => ({success:true,data:{state:{run:'test-
   assert.strictEqual(r.elements.get('ogo-audit-start').disabled,false);
   r = await scenario({responses:[response(false),response(true,50)],action:'ogo_mc_external'});
   assert.ok(r.requests.every(x=>x.action==='ogo_mc_external' && x.nonce==='test-nonce'));
+  r = await scenario({responses:[{success:true,data:{state:{run:'test-run',complete:true,scanned:200}}}],action:'ogo_mc_site_links'});
+  assert.strictEqual(r.requests[0].action,'ogo_mc_site_links');
+  assert.ok(r.redirect && r.elements.get('ogo-audit-progress').textContent.includes('200'));
   const zip=new Blob(['sample'],{type:'application/zip'});
   r = await scenario({responses:[response(false),response(true,200)],action:'ogo_mc_404',coverageFiles:[zip]});
   assert.strictEqual(await r.requests[0].coverage.text(),'sample');

@@ -27,7 +27,7 @@ final class OGO_MC_External_Engine {
         $text=trim($normalized===null?$text:$normalized);
         return $text===''?'[посилання без тексту]':$text;
     }
-    public static function extract($content) {
+    public static function extract($content,$with_attributes=false) {
         $raw='<(script|style|textarea|pre|code)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>[\s\S]*?(?:</\1\s*>|$)';
         preg_match_all('~<!--[\s\S]*?(?:-->|$)|'.$raw.'|'.self::TAG.'~i',$content,$tokens,PREG_OFFSET_CAPTURE);
         $opens=array(); $links=array(); $stack=array();
@@ -36,9 +36,21 @@ final class OGO_MC_External_Engine {
             if (preg_match('~^<a(?=[\s/>])~i',$tag)) {
                 $info=OGO_MC_Engine::href_info($tag);
                 $row=$info?self::classify($info['raw']):null;
+                if ($row && $with_attributes) {
+                    $attrs=array();
+                    foreach (OGO_MC_Engine::anchor_attributes($tag) as $attribute) {
+                        $name=strtolower($attribute[1][0]);
+                        if ($name!=='rel' && $name!=='target') continue;
+                        if (array_key_exists($name,$attrs)) continue;
+                        $attrs[$name]=strtolower(trim(html_entity_decode($attribute[2][0]??$attribute[3][0]??$attribute[4][0]??'',ENT_QUOTES | ENT_HTML5,'UTF-8')));
+                    }
+                    $row['rel']=implode(' ',array_unique(preg_split('/[ \t\r\n\f]+/',$attrs['rel']??'',-1,PREG_SPLIT_NO_EMPTY)));
+                    $row['new_tab']=($attrs['target']??'')==='_blank';
+                }
                 if ($stack) foreach ($stack as $i) $opens[$i]['bad']=true;
                 $i=count($opens);
-                $opens[]=array('row'=>$row,'start'=>$offset+strlen($tag),'end'=>null,'bad'=>!empty($stack)||preg_match('~/\s*>$~',$tag));
+                $self_closing=$with_attributes?OGO_MC_Engine::self_closing_anchor($tag):preg_match('~/\s*>$~',$tag);
+                $opens[]=array('row'=>$row,'start'=>$offset+strlen($tag),'end'=>null,'bad'=>!empty($stack)||$self_closing);
                 $stack[]=$i;
             } elseif (preg_match('~^</a\s*>$~i',$tag) && $stack) {
                 $i=array_pop($stack); $opens[$i]['end']=$offset;
@@ -51,7 +63,9 @@ final class OGO_MC_External_Engine {
                 $row['kind']='review'; $row['issue']='Вкладене, незакрите або пошкоджене посилання';
             }
             $row['anchor_text']=$open['end']===null?'[незакрите посилання]':self::label(substr($content,$open['start'],$open['end']-$open['start']));
-            $key=hash('sha256',json_encode(array($row['raw_url'],$row['anchor_text'],$row['issue']),JSON_INVALID_UTF8_SUBSTITUTE));
+            $variant=array($row['raw_url'],$row['anchor_text'],$row['issue']);
+            if ($with_attributes) $variant=array_merge($variant,array($row['rel'],$row['new_tab']));
+            $key=hash('sha256',json_encode($variant,JSON_INVALID_UTF8_SUBSTITUTE));
             if (isset($links[$key])) ++$links[$key]['link_count'];
             else { $row['variant_key']=$key; $row['url_key']=hash('sha256',$row['target_url']!==''?$row['target_url']:$row['raw_url']); $row['link_count']=1; $links[$key]=$row; }
         }

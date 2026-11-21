@@ -10,6 +10,7 @@ final class OGO_MC_Engine {
     public static function projects() {
         return array(
             'external_audit' => array('label'=>'Міралінкс — ревізія зовнішніх посилань', 'hosts'=>array(), 'photo_callouts'=>false),
+            'site_links' => array('label'=>'Зовнішні посилання — аудит сайту', 'hosts'=>array(), 'photo_callouts'=>false),
             'audit' => array('label'=>'Ревізія старих посилань', 'hosts'=>array('ogo.ua','ogo.rv.ua'), 'photo_callouts'=>false),
             'coverage_404' => array('label'=>'Не знайдено (404)', 'hosts'=>array('ogo.ua','www.ogo.ua'), 'photo_callouts'=>false),
             'media' => array('label'=>'Медіа', 'hosts'=>array('media.ogo.ua','www.media.ogo.ua'), 'photo_callouts'=>true),
@@ -276,7 +277,7 @@ final class OGO_MC_Engine {
             require_once __DIR__.'/source-links.php';
             return OGO_MC_Source_Links::analyze($content,$config['hosts'][0],$config['link_action']==='attributes');
         }
-        if (in_array($project,array('audit','external_audit','coverage_404'),true)) throw new InvalidArgumentException('Use the read-only audit engine');
+        if (in_array($project,array('audit','external_audit','coverage_404','site_links'),true)) throw new InvalidArgumentException('Use the read-only audit engine');
         if ($project === 'flash') { require_once __DIR__.'/flash.php'; return OGO_MC_Flash::analyze($content); }
         // Preserve comments, code and raw text verbatim. Mask length remains identical.
         $masked = preg_replace_callback('~<!--[\s\S]*?-->|<(script|style|textarea|pre|code)\b[^>]*>[\s\S]*?</\1\s*>~i', function($m) { return str_repeat(' ', strlen($m[0])); }, $content);
